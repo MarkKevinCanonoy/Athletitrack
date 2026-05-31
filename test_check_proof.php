@@ -1,0 +1,1 @@
+<?php require 'config.php'; print_r(supabase_request('/rest/v1/proofs?athlete_id=eq.02185c20-d76e-4d90-8e8c-d2b555f9d96e&post_id=eq.7ab6fb69-b1a3-4e26-b6f9-48affc3c5486&order=submitted_at.desc', 'GET')); ?>

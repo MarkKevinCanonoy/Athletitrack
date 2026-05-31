@@ -1,0 +1,33 @@
+config.php
+.env
+
+# Flutter / Dart
+athletitrack/.dart_tool/
+athletitrack/.packages
+athletitrack/.pub-cache/
+athletitrack/.pub/
+athletitrack/build/
+athletitrack/flutter_*.png
+
+# Android
+athletitrack/android/.gradle
+athletitrack/android/app/build/
+athletitrack/android/build/
+athletitrack/android/local.properties
+athletitrack/android/*.iml
+
+# Web
+athletitrack/web/build/
+
+# iOS / macOS
+athletitrack/ios/.generated/
+athletitrack/ios/Flutter/App.framework
+athletitrack/ios/Flutter/Flutter.framework
+athletitrack/ios/Flutter/Generated.xcconfig
+athletitrack/ios/Flutter/app.flx
+athletitrack/ios/Flutter/flutter_assets/
+athletitrack/ios/Pods/
+
+# Miscellaneous
+*.log
+.DS_Store
