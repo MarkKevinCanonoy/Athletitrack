@@ -6,6 +6,7 @@ import 'core/router.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/providers/network_provider.dart';
 import 'core/services/offline_sync_service.dart';
+import 'core/services/notification_service.dart';
 import 'theme/app_colors.dart';
 
 void main() async {
@@ -14,6 +15,10 @@ void main() async {
   // Initialize Hive Offline Storage
   final offlineSyncService = OfflineSyncService();
   await offlineSyncService.init();
+
+  // Initialize Notifications
+  final notificationService = NotificationService();
+  await notificationService.init();
 
   runApp(
     const ProviderScope(

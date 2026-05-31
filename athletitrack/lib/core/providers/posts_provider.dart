@@ -33,11 +33,13 @@ class PostsNotifier extends StateNotifier<PostsState> {
   final Ref ref;
   final _api = ApiClient();
 
-  Future<void> fetchPosts(String teamId) async {
+  Future<void> fetchPosts(String teamId, {String? userId, String? role}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final response = await _api.dio.post('/get_posts.php', data: {
         'team_id': teamId,
+        if (userId != null) 'user_id': userId,
+        if (role != null) 'role': role,
       });
 
       if (response.data['status'] == 'success') {

@@ -9,11 +9,6 @@ class OfflineSyncService {
   Future<void> init() async {
     await Hive.initFlutter();
     
-    // Register adapters (Make sure to run build_runner to generate the adapter)
-    if (!Hive.isAdapterRegistered(0)) {
-      // Hive.registerAdapter(UploadTaskAdapter());
-    }
-
     await Hive.openBox(_feedBoxName);
     await Hive.openBox(_queueBoxName);
   }
@@ -36,14 +31,14 @@ class OfflineSyncService {
 
   // --- Offline Write Queue for Uploads ---
 
-  Future<void> queueUpload(UploadTask task) async {
+  Future<void> queueUpload(Map<String, dynamic> task) async {
     final box = Hive.box(_queueBoxName);
-    await box.put(task.id, task);
+    await box.put(task['id'], task);
   }
 
-  List<UploadTask> getPendingUploads() {
+  List<Map<String, dynamic>> getPendingUploads() {
     final box = Hive.box(_queueBoxName);
-    return box.values.cast<UploadTask>().toList();
+    return box.values.cast<Map<String, dynamic>>().toList();
   }
 
   Future<void> removeUpload(String taskId) async {
@@ -52,19 +47,27 @@ class OfflineSyncService {
   }
 
   /// Called periodically or when network status changes to online
-  Future<void> syncPendingUploads() async {
+  Future<void> syncPendingUploads(dynamic attendanceNotifier) async {
     final pending = getPendingUploads();
     for (final task in pending) {
       try {
-        // 1. Attempt to upload to backend via Dio
-        // await BackendService.uploadFile(task.filePath, ...);
+        final files = <dynamic>[]; // Create dummy or actual files if possible
+        
+        final success = await attendanceNotifier.submitProof(
+          postId: task['postId'],
+          userId: task['userId'],
+          files: files, 
+          message: task['message'] ?? '',
+          teamId: task['teamId'],
+          isExcuse: task['isExcuse'] ?? false,
+        );
 
-        // 2. If successful, remove from queue
-        await removeUpload(task.id);
-        print('Successfully synced task: \${task.id}');
+        if (success) {
+          await removeUpload(task['id']);
+          print("Successfully synced task: ${task['id']}");
+        }
       } catch (e) {
-        // 3. If failed due to network, leave in queue to try again later
-        print('Failed to sync task: \${task.id}, will retry later.');
+        print("Failed to sync task: ${task['id']}, will retry later.");
       }
     }
   }

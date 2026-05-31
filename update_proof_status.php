@@ -31,6 +31,8 @@ if ($response['status'] >= 200 && $response['status'] < 300) {
     echo json_encode(['status' => 'success']);
 } else {
     http_response_code(500);
+    require_once 'debug_helper.php';
+    log_error("Update proof status error: " . print_r($response, true));
     echo json_encode(['status' => 'error', 'message' => 'Failed to update status', 'details' => $response['data']]);
 }
 ?>

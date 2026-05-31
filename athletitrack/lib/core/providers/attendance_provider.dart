@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import '../services/api_client.dart';
 
 class AttendanceState {
@@ -63,20 +65,35 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
   Future<bool> submitProof({
     required String postId,
     required String userId,
-    required List<String> files, // Dummy base64 or paths
+    required List<PlatformFile> files,
     String message = '',
     required String teamId,
     bool isExcuse = false,
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final response = await _api.dio.post('/upload_proof.php', data: {
+      final formData = FormData.fromMap({
         'post_id': postId,
         'user_id': userId,
-        'files': files,
         'message': message,
-        'is_excuse': isExcuse,
+        'is_excuse': isExcuse.toString(),
       });
+
+      for (var file in files) {
+        if (file.bytes != null) {
+          formData.files.add(MapEntry(
+            'files[]',
+            MultipartFile.fromBytes(file.bytes!, filename: file.name),
+          ));
+        } else if (file.path != null) {
+          formData.files.add(MapEntry(
+            'files[]',
+            await MultipartFile.fromFile(file.path!, filename: file.name),
+          ));
+        }
+      }
+
+      final response = await _api.dio.post('/upload_proof.php', data: formData);
 
       if (response.data['status'] == 'success') {
         // Refresh attendance or posts if needed

@@ -1,34 +1,77 @@
 <?php
 require_once 'config.php';
+require_once 'debug_helper.php';
 header("Content-Type: application/json; charset=UTF-8");
 
-$inputData = json_decode(file_get_contents("php://input"), true) ?? [];
+$post_id = $_POST['post_id'] ?? '';
+$user_id = $_POST['user_id'] ?? '';
+$message = $_POST['message'] ?? '';
+$is_excuse = isset($_POST['is_excuse']) ? filter_var($_POST['is_excuse'], FILTER_VALIDATE_BOOLEAN) : false;
 
-if (empty($inputData['post_id']) || empty($inputData['user_id']) || empty($inputData['files'])) {
+if (empty($post_id) || empty($user_id)) {
     http_response_code(400);
-    echo json_encode(['status' => 'error', 'message' => 'Missing required fields (post_id, user_id, files).']);
+    echo json_encode(['status' => 'error', 'message' => 'Missing required fields (post_id, user_id).']);
     exit();
 }
 
-$post_id = $inputData['post_id'];
-$user_id = $inputData['user_id'];
-$files = $inputData['files']; // Expect array of base64 files or dummy urls
-$message = $inputData['message'] ?? '';
-$is_excuse = $inputData['is_excuse'] ?? false;
-
-// We will simulate uploading by saving them or just storing their names
 $urls = [];
-foreach ($files as $file) {
-    // If it's a real file upload in MVP, we can just save it as a dummy URL for now
-    $urls[] = "https://mock-storage.athletitrack/file_" . uniqid() . ".xyz";
+$allowedTypes = ['image/jpeg', 'image/png', 'video/mp4', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+$maxSize = 10 * 1024 * 1024; // 10MB
+
+if (!empty($_FILES['files']['name'][0])) {
+    foreach ($_FILES['files']['tmp_name'] as $key => $tmp_name) {
+        $file_name = $_FILES['files']['name'][$key];
+        $file_size = $_FILES['files']['size'][$key];
+        $file_type = $_FILES['files']['type'][$key];
+        $file_error = $_FILES['files']['error'][$key];
+
+        if ($file_error !== UPLOAD_ERR_OK) {
+            continue;
+        }
+
+        if ($file_size > $maxSize) {
+            http_response_code(400);
+            $msg = "File $file_name exceeds 10MB limit.";
+            log_error($msg);
+            echo json_encode(['status' => 'error', 'message' => $msg]);
+            exit();
+        }
+
+        if (!in_array($file_type, $allowedTypes)) {
+            http_response_code(400);
+            $msg = "File type $file_type not allowed for $file_name.";
+            log_error($msg);
+            echo json_encode(['status' => 'error', 'message' => $msg]);
+            exit();
+        }
+
+        $fileData = file_get_contents($tmp_name);
+        $unique_name = uniqid() . '_' . preg_replace('/[^A-Za-z0-9.\-_]/', '', $file_name);
+        
+        $uploadUrl = "/storage/v1/object/proofs/" . $unique_name;
+        
+        // Upload to Supabase Storage
+        $uploadResponse = supabase_request($uploadUrl, 'POST', $fileData, [
+            'Content-Type: ' . $file_type
+        ]);
+
+        if ($uploadResponse['status'] >= 200 && $uploadResponse['status'] < 300) {
+            $urls[] = SUPABASE_URL . "/storage/v1/object/public/proofs/" . $unique_name;
+        } else {
+            http_response_code(500);
+            log_error("Supabase Storage Error: " . print_r($uploadResponse, true));
+            echo json_encode(['status' => 'error', 'message' => 'Failed to upload to storage', 'details' => $uploadResponse]);
+            exit();
+        }
+    }
+} else if (!$is_excuse) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'No files uploaded.']);
+    exit();
 }
 
 $file_url = json_encode($urls);
-$file_type = 'multiple';
 
-// Notice: In the schema, it's `training_proof`. The get_attendance queries `/rest/v1/proofs`.
-// Wait, get_attendance queries `proofs`. Let's check schema.sql.
-// Actually get_attendance queries /rest/v1/proofs but the schema says training_proof. Let's insert into training_proof.
 $insertData = [
     'post_id' => $post_id,
     'athlete_id' => $user_id,
@@ -44,6 +87,7 @@ if ($response['status'] >= 200 && $response['status'] < 300) {
     echo json_encode(['status' => 'success', 'message' => 'Proof submitted successfully.']);
 } else {
     http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Failed to submit proof.', 'details' => $response['data']]);
+    log_error("Database Error: " . print_r($response['data'], true));
+    echo json_encode(['status' => 'error', 'message' => 'Failed to submit proof record.', 'details' => $response['data']]);
 }
 ?>

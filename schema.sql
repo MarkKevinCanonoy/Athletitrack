@@ -63,6 +63,17 @@ CREATE TABLE proofs (
 -- Create a storage bucket for proofs (Run this manually or via UI if needed)
 -- INSERT INTO storage.buckets (id, name, public) VALUES ('proofs', 'proofs', true);
 
+-- Enable RLS and create policies for the storage bucket so images can be uploaded
+-- Allow public uploads to the proofs bucket
+CREATE POLICY "Allow public uploads to proofs"
+ON storage.objects FOR INSERT
+WITH CHECK (bucket_id = 'proofs');
+
+-- Allow public to read objects from proofs
+CREATE POLICY "Allow public read from proofs"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'proofs');
+
 -- 6. OTP Requests (Temporary storage for registration verifications)
 CREATE TABLE otp_requests (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,

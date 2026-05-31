@@ -12,12 +12,35 @@ if (empty($inputData['team_id'])) {
 }
 
 $team_id = $inputData['team_id'];
+$user_id = $inputData['user_id'] ?? null;
+$role = $inputData['role'] ?? null;
 
 // Fetch posts for the given team, ordered by created_at descending
 $response = supabase_request("/rest/v1/posts?team_id=eq." . urlencode($team_id) . "&order=created_at.desc", 'GET');
 
 if ($response['status'] == 200) {
-    echo json_encode(['status' => 'success', 'posts' => $response['data']]);
+    $posts = $response['data'];
+    
+    // Skill Level Filtering (FR-20)
+    if ($role === 'Athlete' && $user_id) {
+        // Fetch athlete's skill level
+        $memberResp = supabase_request("/rest/v1/team_members?team_id=eq." . urlencode($team_id) . "&athlete_id=eq." . urlencode($user_id), 'GET');
+        $athlete_skill = 'Intermediate'; // Default
+        if ($memberResp['status'] == 200 && !empty($memberResp['data'])) {
+            $athlete_skill = $memberResp['data'][0]['skill_level'] ?? 'Intermediate';
+        }
+
+        $filteredPosts = [];
+        foreach ($posts as $post) {
+            $post_skill = $post['skill_level_filter'] ?? 'All';
+            if ($post_skill === 'All' || empty($post_skill) || strtolower($post_skill) === strtolower($athlete_skill)) {
+                $filteredPosts[] = $post;
+            }
+        }
+        $posts = $filteredPosts;
+    }
+
+    echo json_encode(['status' => 'success', 'posts' => $posts]);
 } else {
     http_response_code(500);
     echo json_encode(['status' => 'error', 'message' => 'Failed to fetch posts.', 'details' => $response['data']]);

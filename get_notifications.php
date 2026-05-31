@@ -15,7 +15,7 @@ $teamsRes = supabase_request("/rest/v1/teams?coach_id=eq." . urlencode($user_id)
 if ($teamsRes['status'] == 200 && !empty($teamsRes['data'])) {
     $teamIds = array_column($teamsRes['data'], 'id');
     $teamIdStr = implode(',', $teamIds);
-    $reqsRes = supabase_request("/rest/v1/team_members?team_id=in.($teamIdStr)&status=eq.pending&select=id,athlete_id,team_id,teams(name),users!athlete_id(full_name)&order=created_at.desc", 'GET');
+    $reqsRes = supabase_request("/rest/v1/team_members?team_id=in.($teamIdStr)&status=eq.pending&select=id,athlete_id,team_id,teams(name),users(full_name)&order=joined_at.desc", 'GET');
     
     if ($reqsRes['status'] == 200 && is_array($reqsRes['data'])) {
         foreach ($reqsRes['data'] as $req) {

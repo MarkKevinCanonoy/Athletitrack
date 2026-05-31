@@ -35,7 +35,7 @@ $teamIdsStr = implode(',', $teamIds);
 
 // Now fetch pending team_members for these team IDs, expanding the athlete (users) and teams
 // Assuming Supabase foreign keys are properly set for embedding: 
-$query = "/rest/v1/team_members?status=eq.pending&team_id=in.(" . $teamIdsStr . ")&select=id,status,joined_at,team_id,teams(name),users!athlete_id(full_name,email)";
+$query = "/rest/v1/team_members?status=eq.pending&team_id=in.(" . $teamIdsStr . ")&select=id,status,joined_at,team_id,teams(name),users(full_name,email)";
 
 $reqRes = supabase_request($query, 'GET');
 

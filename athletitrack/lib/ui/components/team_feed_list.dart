@@ -6,6 +6,8 @@ import 'common_components.dart';
 import '../../core/providers/posts_provider.dart';
 import 'training_card_modal.dart';
 import '../utils/modal_utils.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/services/notification_service.dart';
 
 class TeamFeedList extends ConsumerStatefulWidget {
   final bool isCoach;
@@ -26,7 +28,12 @@ class _TeamFeedListState extends ConsumerState<TeamFeedList> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(postsProvider.notifier).fetchPosts(widget.teamId);
+      final auth = ref.read(authProvider);
+      ref.read(postsProvider.notifier).fetchPosts(
+        widget.teamId,
+        userId: auth.user?['id'],
+        role: auth.role,
+      );
     });
   }
 
@@ -101,6 +108,12 @@ class _TeamFeedListState extends ConsumerState<TeamFeedList> {
                             IconButton(
                               icon: const Icon(Icons.alarm_add, color: AppColors.primary, size: 20),
                               onPressed: () {
+                                NotificationService().scheduleTrainingReminder(
+                                  id: post['id'].hashCode,
+                                  title: post['title'] ?? 'Training Session',
+                                  sessionDate: post['session_date'] ?? DateTime.now().toString().split(' ')[0],
+                                  sessionTime: post['session_time'] ?? '00:00',
+                                );
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(content: Text('5-minute reminder set!'))
                                 );

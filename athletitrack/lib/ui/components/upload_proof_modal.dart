@@ -6,6 +6,8 @@ import 'common_components.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/api_client.dart';
 import '../../core/providers/attendance_provider.dart';
+import '../../core/providers/network_provider.dart';
+import '../../core/services/offline_sync_service.dart';
 
 class UploadProofModal extends ConsumerStatefulWidget {
   final bool isExcuse;
@@ -57,6 +59,7 @@ class _UploadProofModalState extends ConsumerState<UploadProofModal> {
   Future<void> _pickFiles() async {
     FilePickerResult? result = await FilePicker.pickFiles(
       allowMultiple: true,
+      withData: true,
       type: FileType.custom,
       allowedExtensions: ['jpg', 'png', 'mp4', 'pdf', 'doc', 'docx'],
     );
@@ -78,13 +81,30 @@ class _UploadProofModalState extends ConsumerState<UploadProofModal> {
     final user = ref.read(authProvider).user;
     if (user == null) return;
 
-    // Simulate file URLs
-    final fileUrls = attachedFiles.map((f) => f.name).toList();
+    final isOnline = ref.read(networkProvider);
+    if (!isOnline) {
+      // Save to offline queue
+      final task = {
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'postId': widget.post['id'].toString(),
+        'userId': user['id'].toString(),
+        'message': _messageController.text,
+        'teamId': widget.teamId,
+        'isExcuse': widget.isExcuse,
+      };
+      await ref.read(offlineSyncProvider).queueUpload(task);
+      setState(() => _isSubmitting = false);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Offline: Proof queued for sync later.')));
+      }
+      return;
+    }
 
     final success = await ref.read(attendanceProvider.notifier).submitProof(
       postId: widget.post['id'].toString(),
       userId: user['id'].toString(),
-      files: fileUrls.isEmpty ? ['excuse_doc.pdf'] : fileUrls,
+      files: attachedFiles,
       message: _messageController.text,
       teamId: widget.teamId,
       isExcuse: widget.isExcuse,
@@ -95,6 +115,10 @@ class _UploadProofModalState extends ConsumerState<UploadProofModal> {
     if (success && mounted) {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Submitted successfully!')));
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ref.read(attendanceProvider).error ?? 'Submission failed.')),
+      );
     }
   }
 
