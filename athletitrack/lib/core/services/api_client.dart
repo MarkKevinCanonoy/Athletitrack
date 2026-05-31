@@ -11,21 +11,24 @@ class ApiClient {
   }
 
   ApiClient._internal() {
-    // On Linux and some other systems, 127.0.0.1 is more reliable than localhost 
+    // On Linux and some other systems, 127.0.0.1 is more reliable than localhost
     // due to IPv6 resolution issues with XAMPP/LAMPP
-    String baseUrl = 'http://127.0.0.1/athletitrack-api';
+    String baseUrl = 'http://127.0.0.1:8080/Athletitrack';
     if (!kIsWeb && Platform.isAndroid) {
-      baseUrl = 'http://10.0.2.2/athletitrack-api';
+      baseUrl = 'http://10.0.2.2:8080/Athletitrack';
     }
 
-    dio = Dio(BaseOptions(
-      baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    ));
+    dio = Dio(
+      BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+        headers: {'Content-Type': 'application/json'},
+        // Accept ALL status codes — PHP uses 4xx/5xx for business logic errors.
+        // Flutter reads the JSON body (status/message) to determine success/failure.
+        validateStatus: (status) => true,
+      ),
+    );
   }
 
   void setToken(String token) {
