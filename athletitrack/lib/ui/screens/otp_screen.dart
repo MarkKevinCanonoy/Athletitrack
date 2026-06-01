@@ -86,8 +86,13 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                       ),
                       const SizedBox(height: 24),
                       TextButton(
-                        onPressed: () {
-                          // Resend logic could be implemented here
+                        onPressed: authState.isLoading ? null : () async {
+                          final success = await ref.read(authProvider.notifier).resendOtp();
+                          if (success && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('A new OTP has been sent to your email.')),
+                            );
+                          }
                         },
                         child: const Text('Resend OTP', style: TextStyle(color: AppColors.primary)),
                       ),

@@ -126,6 +126,28 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<bool> resendOtp() async {
+    if (state.pendingEmail == null) return false;
+    
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final response = await _api.dio.post('/resend_otp.php', data: {
+        'email': state.pendingEmail,
+      });
+
+      if (response.data['status'] == 'success') {
+        state = state.copyWith(isLoading: false);
+        return true;
+      } else {
+        state = state.copyWith(isLoading: false, error: response.data['message']);
+        return false;
+      }
+    } on DioException catch (e) {
+      state = state.copyWith(isLoading: false, error: 'Network error occurred');
+      return false;
+    }
+  }
+
   void clearError() {
     state = state.copyWith(clearError: true);
   }
