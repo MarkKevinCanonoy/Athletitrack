@@ -28,8 +28,8 @@ if ($checkUser['status'] == 200 && !empty($checkUser['data'])) {
     exit();
 }
 
-// 2. Generate a 6-digit OTP (Hardcoded to 123456 for Render bypass)
-$otp = "123456";
+// 2. Generate a 6-digit OTP
+$otp = sprintf("%06d", mt_rand(1, 999999));
 $expires_at = gmdate('Y-m-d\TH:i:s\Z', strtotime('+5 minutes'));
 $password_hash = password_hash($password, PASSWORD_BCRYPT);
 
@@ -53,8 +53,33 @@ if ($insertResponse['status'] >= 400) {
     exit();
 }
 
-// 4. Send Email via PHPMailer (BYPASSED FOR RENDER COMPATIBILITY)
-// Since Render free tier blocks Port 587, we fake the email success.
-// The user can just type 123456 on the OTP screen.
-echo json_encode(['status' => 'success', 'message' => 'OTP sent to email. (TEST MODE: Use 123456)']);
+// 4. Send Email via PHPMailer
+$mail = new PHPMailer(true);
+try {
+    // Server settings
+    $mail->isSMTP();
+    $mail->Host       = 'smtp.gmail.com';
+    $mail->SMTPAuth   = true;
+    $mail->Username   = SMTP_EMAIL;
+    $mail->Password   = SMTP_APP_PASSWORD;
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+    $mail->Port       = 587;
+
+    // Recipients
+    $mail->setFrom(SMTP_EMAIL, 'AthletiTrack Admin');
+    $mail->addAddress($email, $fullName);
+
+    // Content
+    $mail->isHTML(true);
+    $mail->Subject = 'Your AthletiTrack Verification Code';
+    $mail->Body    = "Hello $fullName,<br><br>Your verification code is: <b>$otp</b><br><br>This code expires in 5 minutes.";
+    $mail->AltBody = "Hello $fullName,\n\nYour verification code is: $otp\n\nThis code expires in 5 minutes.";
+
+    $mail->send();
+    echo json_encode(['status' => 'success', 'message' => 'OTP sent to email.']);
+} catch (Exception $e) {
+    // Cleanup the database request if email fails
+    supabase_request("/rest/v1/otp_requests?email=eq." . urlencode($email), 'DELETE');
+    echo json_encode(['status' => 'error', 'message' => "Message could not be sent. Mailer Error: {$mail->ErrorInfo}"]);
+}
 ?>
