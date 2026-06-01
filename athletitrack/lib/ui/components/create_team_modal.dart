@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/app_colors.dart';
 import 'common_components.dart';
 import '../../core/providers/teams_provider.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
 
 class CreateTeamModal extends ConsumerStatefulWidget {
   const CreateTeamModal({super.key});
@@ -16,6 +18,7 @@ class _CreateTeamModalState extends ConsumerState<CreateTeamModal> {
   final TextEditingController _categoryController = TextEditingController();
   String selectedSkill = 'Beginner';
   String generatedCode = '';
+  PlatformFile? _selectedLogo;
 
   @override
   void dispose() {
@@ -29,6 +32,18 @@ class _CreateTeamModalState extends ConsumerState<CreateTeamModal> {
       // Basic unique alphanumeric code generation logic
       generatedCode = 'TEAM-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
     });
+  }
+
+  Future<void> _pickLogo() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedLogo = result.files.first;
+      });
+    }
   }
 
   @override
@@ -71,6 +86,23 @@ class _CreateTeamModalState extends ConsumerState<CreateTeamModal> {
                 if (val != null) setState(() => selectedSkill = val);
               },
               dropdownColor: AppColors.surface,
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _selectedLogo != null ? 'Logo: ${_selectedLogo!.name}' : 'No logo selected (Optional)',
+                    style: const TextStyle(color: AppColors.textSecondary),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _pickLogo,
+                  icon: const Icon(Icons.image),
+                  label: const Text('Pick Logo'),
+                )
+              ],
             ),
             const SizedBox(height: 24),
             if (generatedCode.isNotEmpty) ...[
@@ -133,7 +165,7 @@ class _CreateTeamModalState extends ConsumerState<CreateTeamModal> {
                               }
                               
                               final success = await ref.read(teamsProvider.notifier).createTeam(
-                                name, category, selectedSkill, generatedCode
+                                name, category, selectedSkill, generatedCode, _selectedLogo
                               );
                               
                               if (success && mounted) {

@@ -100,11 +100,30 @@ class TeamDetailScreen extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
-                                  Text(
-                                    teamName,
-                                    style: Theme.of(context).textTheme.displayMedium,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      if (teamData['logo_url'] != null) ...[
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Image.network(
+                                            teamData['logo_url'],
+                                            width: 60,
+                                            height: 60,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                      ],
+                                      Expanded(
+                                        child: Text(
+                                          teamName,
+                                          style: Theme.of(context).textTheme.displayMedium,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   const SizedBox(height: 8),
                                   Wrap(

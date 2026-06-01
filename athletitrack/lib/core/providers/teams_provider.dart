@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/api_client.dart';
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'auth_provider.dart';
 
 class TeamsState {
@@ -57,7 +58,7 @@ class TeamsNotifier extends StateNotifier<TeamsState> {
     }
   }
 
-  Future<bool> createTeam(String name, String category, String skillLevel, String teamCode) async {
+  Future<bool> createTeam(String name, String category, String skillLevel, String teamCode, [PlatformFile? logo]) async {
     final authState = ref.read(authProvider);
     final userId = authState.user?['id'];
     if (userId == null) {
@@ -67,12 +68,28 @@ class TeamsNotifier extends StateNotifier<TeamsState> {
 
     state = state.copyWith(isLoading: true, clearError: true);
     try {
+      String? logoUrl;
+      
+      if (logo != null) {
+        final formData = FormData.fromMap({
+          'logo': await MultipartFile.fromFile(logo.path!, filename: logo.name),
+        });
+        final uploadRes = await _api.dio.post('/upload_logo.php', data: formData);
+        if (uploadRes.data['status'] == 'success') {
+          logoUrl = uploadRes.data['logo_url'];
+        } else {
+          state = state.copyWith(isLoading: false, error: uploadRes.data['message']);
+          return false;
+        }
+      }
+
       final response = await _api.dio.post('/create_team.php', data: {
         'coach_id': userId,
         'name': name,
         'category': category,
         'skill_level': skillLevel,
         'team_code': teamCode,
+        if (logoUrl != null) 'logo_url': logoUrl,
       });
 
       if (response.data['status'] == 'success') {

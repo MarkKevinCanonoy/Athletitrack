@@ -143,12 +143,31 @@ class _AthleteDashboardScreenState extends ConsumerState<AthleteDashboardScreen>
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          team['name'] ?? 'Unknown Team',
-                                          style: Theme.of(context).textTheme.displaySmall,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          if (team['logo_url'] != null) ...[
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.circular(8),
+                                              child: Image.network(
+                                                team['logo_url'],
+                                                width: 40,
+                                                height: 40,
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                          ],
+                                          Expanded(
+                                            child: Text(
+                                              team['name'] ?? 'Unknown Team',
+                                              style: Theme.of(context).textTheme.displaySmall,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                         const Spacer(),
                                         Row(
                                           children: [

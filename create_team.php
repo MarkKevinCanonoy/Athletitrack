@@ -16,6 +16,7 @@ $name = $inputData['name'];
 $category = $inputData['category'] ?? null;
 $skill_level = $inputData['skill_level'] ?? null;
 $team_code = $inputData['team_code'];
+$logo_url = $inputData['logo_url'] ?? null;
 
 // Check if team code already exists
 $existing = supabase_request("/rest/v1/teams?code=eq." . urlencode($team_code), 'GET');
@@ -31,7 +32,8 @@ $insertData = [
     'code' => $team_code,
     'description' => $inputData['description'] ?? null,
     'category' => $category,
-    'skill_level' => $skill_level
+    'skill_level' => $skill_level,
+    'logo_url' => $logo_url
 ];
 
 $response = supabase_request("/rest/v1/teams", 'POST', $insertData);
