@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../components/common_components.dart';
+import '../components/forgot_password_modal.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -178,7 +179,21 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                   ? const CircularProgressIndicator(color: Colors.white)
                                   : Text(isLogin ? 'Login' : 'Register'),
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 16),
+                            if (isLogin)
+                              TextButton(
+                                onPressed: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (ctx) => const ForgotPasswordModal(),
+                                  );
+                                },
+                                child: const Text(
+                                  'Forgot Password?',
+                                  style: TextStyle(color: AppColors.textSecondary),
+                                ),
+                              ),
+                            const SizedBox(height: 8),
                             TextButton(
                               style: TextButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(vertical: 16),

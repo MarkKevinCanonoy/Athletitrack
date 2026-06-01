@@ -11,6 +11,7 @@ class AuthState {
   final bool isLoading;
   final String? error;
   final String? pendingEmail; // Used during OTP verification
+  final bool isInCooldown;
 
   AuthState({
     this.isAuthenticated = false,
@@ -20,6 +21,7 @@ class AuthState {
     this.isLoading = false,
     this.error,
     this.pendingEmail,
+    this.isInCooldown = false,
   });
 
   AuthState copyWith({
@@ -31,6 +33,7 @@ class AuthState {
     String? error,
     bool clearError = false,
     String? pendingEmail,
+    bool? isInCooldown,
   }) {
     return AuthState(
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
@@ -40,6 +43,7 @@ class AuthState {
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
       pendingEmail: pendingEmail ?? this.pendingEmail,
+      isInCooldown: isInCooldown ?? this.isInCooldown,
     );
   }
 }
@@ -91,7 +95,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       });
 
       if (response.data['status'] == 'success') {
-        state = state.copyWith(isLoading: false, pendingEmail: email);
+        state = state.copyWith(isLoading: false, pendingEmail: email, isInCooldown: false);
         return true;
       } else {
         state = state.copyWith(isLoading: false, error: response.data['message']);
@@ -114,10 +118,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
       });
 
       if (response.data['status'] == 'success') {
-        state = state.copyWith(isLoading: false, pendingEmail: null);
-        return true; // Verification success, user can now log in
+        final token = response.data['token'];
+        final user = response.data['user'] as Map<String, dynamic>;
+        final role = user['role'];
+        _api.setToken(token);
+        
+        state = state.copyWith(
+          isAuthenticated: true,
+          token: token,
+          role: role,
+          user: user,
+          isLoading: false,
+          pendingEmail: null,
+        );
+        return true; // Verification success, user is logged in
       } else {
-        state = state.copyWith(isLoading: false, error: response.data['message']);
+        final message = response.data['message'] as String?;
+        final isCooldown = message != null && message.contains('Too many failed attempts');
+        state = state.copyWith(isLoading: false, error: message, isInCooldown: isCooldown);
         return false;
       }
     } on DioException catch (e) {
@@ -139,7 +157,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = state.copyWith(isLoading: false);
         return true;
       } else {
-        state = state.copyWith(isLoading: false, error: response.data['message']);
+        final message = response.data['message'] as String?;
+        final isCooldown = message != null && message.contains('Too many failed attempts');
+        state = state.copyWith(isLoading: false, error: message, isInCooldown: isCooldown);
         return false;
       }
     } on DioException catch (e) {

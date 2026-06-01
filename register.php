@@ -33,8 +33,23 @@ $otp = sprintf("%06d", mt_rand(1, 999999));
 $expires_at = gmdate('Y-m-d\TH:i:s\Z', strtotime('+5 minutes'));
 $password_hash = password_hash($password, PASSWORD_BCRYPT);
 
-// 3. Save to 'otp_requests' table in Supabase
-// First, delete any existing pending OTPs for this email to avoid duplicates
+// 3. Check for existing OTP request and cooldown
+$checkOtp = supabase_request("/rest/v1/otp_requests?email=ilike." . urlencode($email));
+if ($checkOtp['status'] == 200 && !empty($checkOtp['data'])) {
+    $existingOtp = $checkOtp['data'][0];
+    if (!empty($existingOtp['cooldown_until'])) {
+        $cooldown_until = strtotime($existingOtp['cooldown_until']);
+        $now = time();
+        if ($now < $cooldown_until) {
+            $minutes_left = ceil(($cooldown_until - $now) / 60);
+            echo json_encode(['status' => 'error', 'message' => "Too many failed attempts. Please try again in {$minutes_left} minutes."]);
+            exit();
+        }
+    }
+}
+
+// 4. Save to 'otp_requests' table in Supabase
+// Delete any existing pending OTPs for this email to avoid duplicates
 supabase_request("/rest/v1/otp_requests?email=ilike." . urlencode($email), 'DELETE');
 
 $otpData = [

@@ -3,7 +3,8 @@ import '../services/api_client.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'auth_provider.dart';
-
+import '../services/offline_sync_service.dart';
+import 'network_provider.dart';
 class TeamsState {
   final List<Map<String, dynamic>> teams;
   final bool isLoading;
@@ -41,6 +42,19 @@ class TeamsNotifier extends StateNotifier<TeamsState> {
     if (userId == null) return;
 
     state = state.copyWith(isLoading: true, clearError: true);
+    
+    final isOnline = ref.read(networkProvider);
+    if (!isOnline) {
+      final cached = ref.read(offlineSyncProvider).getCachedTeams(userId);
+      if (cached != null) {
+        final List<dynamic> rawTeams = cached['data'] ?? [];
+        state = state.copyWith(isLoading: false, teams: rawTeams.cast<Map<String, dynamic>>());
+      } else {
+        state = state.copyWith(isLoading: false, error: 'No offline data available for teams');
+      }
+      return;
+    }
+
     try {
       final role = authState.user?['role'];
       final body = (role == 'Coach') ? {'coach_id': userId} : {'athlete_id': userId};
@@ -49,6 +63,10 @@ class TeamsNotifier extends StateNotifier<TeamsState> {
       if (response.data['status'] == 'success') {
         final List<dynamic> rawTeams = response.data['teams'] ?? [];
         final List<Map<String, dynamic>> teamsList = rawTeams.cast<Map<String, dynamic>>();
+        
+        // Cache teams for offline use
+        ref.read(offlineSyncProvider).cacheTeams(userId, teamsList);
+        
         state = state.copyWith(isLoading: false, teams: teamsList);
       } else {
         state = state.copyWith(isLoading: false, error: response.data['message']);
@@ -71,8 +89,17 @@ class TeamsNotifier extends StateNotifier<TeamsState> {
       String? logoUrl;
       
       if (logo != null) {
+        MultipartFile multipartFile;
+        if (logo.bytes != null) {
+          multipartFile = MultipartFile.fromBytes(logo.bytes!, filename: logo.name);
+        } else if (logo.path != null) {
+          multipartFile = await MultipartFile.fromFile(logo.path!, filename: logo.name);
+        } else {
+          throw Exception('Unable to read logo file data.');
+        }
+
         final formData = FormData.fromMap({
-          'logo': await MultipartFile.fromFile(logo.path!, filename: logo.name),
+          'logo': multipartFile,
         });
         final uploadRes = await _api.dio.post('/upload_logo.php', data: formData);
         if (uploadRes.data['status'] == 'success') {

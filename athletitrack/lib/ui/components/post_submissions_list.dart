@@ -132,6 +132,8 @@ class _PostSubmissionsListState extends State<PostSubmissionsList> {
                   'file_url': proof['file_url'],
                   'is_excuse': proof['is_excuse'] == true || proof['is_excuse'] == 'true' || proof['is_excuse'] == 1,
                   'comment': proof['comment'],
+                  'coach_note': proof['coach_note'],
+                  'submitted_at': proof['submitted_at'] ?? proof['created_at'],
                 };
                 showDialog(
                   context: context,

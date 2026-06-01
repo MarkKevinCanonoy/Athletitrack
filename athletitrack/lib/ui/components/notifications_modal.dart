@@ -62,23 +62,43 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
                     separatorBuilder: (context, index) => const Divider(color: AppColors.border),
                     itemBuilder: (context, index) {
                       final req = requests[index];
-                      final isJoin = req['type'] == 'join_request';
+                      final type = req['type'] ?? 'unknown';
+                      final isJoin = type == 'join_request';
+                      final isApproval = type == 'approval';
+                      final isRejection = type == 'rejection';
+                      
+                      Color iconColor = Colors.orange;
+                      IconData iconData = Icons.campaign;
+                      
+                      if (isJoin) {
+                        iconColor = AppColors.primary;
+                        iconData = Icons.person_add;
+                      } else if (isApproval) {
+                        iconColor = AppColors.success;
+                        iconData = Icons.check_circle;
+                      } else if (isRejection) {
+                        iconColor = AppColors.danger;
+                        iconData = Icons.cancel;
+                      }
+
+                      String timestampText = '';
+                      if (req['timestamp'] != null) {
+                        try {
+                          final dt = DateTime.parse(req['timestamp']).toLocal();
+                          timestampText = '${dt.month}/${dt.day}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                        } catch (_) {}
+                      }
 
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
                         leading: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: isJoin ? AppColors.primary.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
+                            color: iconColor.withValues(alpha: 0.1),
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isJoin ? AppColors.primary : Colors.orange,
-                            ),
+                            border: Border.all(color: iconColor),
                           ),
-                          child: Icon(
-                            isJoin ? Icons.person_add : Icons.campaign,
-                            color: isJoin ? AppColors.primary : Colors.orange,
-                          ),
+                          child: Icon(iconData, color: iconColor),
                         ),
                         title: Text(
                           req['message'] ?? 'Notification',
@@ -86,25 +106,31 @@ class _NotificationsModalState extends ConsumerState<NotificationsModal> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        subtitle: isJoin ? Column(
+                        subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                TextButton(
-                                  onPressed: reqsState.isLoading ? null : () => ref.read(requestsProvider.notifier).processRequest(req['id'], 'approve'),
-                                  child: const Text('Approve'),
-                                ),
-                                const SizedBox(width: 8),
-                                TextButton(
-                                  onPressed: reqsState.isLoading ? null : () => ref.read(requestsProvider.notifier).processRequest(req['id'], 'reject'),
-                                  child: const Text('Reject', style: TextStyle(color: AppColors.danger)),
-                                ),
-                              ],
-                            ),
+                            if (timestampText.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(timestampText, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                            ],
+                            if (isJoin) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  TextButton(
+                                    onPressed: reqsState.isLoading ? null : () => ref.read(requestsProvider.notifier).processRequest(req['id'], 'approve'),
+                                    child: const Text('Approve'),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  TextButton(
+                                    onPressed: reqsState.isLoading ? null : () => ref.read(requestsProvider.notifier).processRequest(req['id'], 'reject'),
+                                    child: const Text('Reject', style: TextStyle(color: AppColors.danger)),
+                                  ),
+                                ],
+                              ),
+                            ]
                           ],
-                        ) : null,
+                        ),
                       );
                     },
                   ),

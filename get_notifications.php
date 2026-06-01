@@ -15,7 +15,7 @@ $teamsRes = supabase_request("/rest/v1/teams?coach_id=eq." . urlencode($user_id)
 if ($teamsRes['status'] == 200 && !empty($teamsRes['data'])) {
     $teamIds = array_column($teamsRes['data'], 'id');
     $teamIdStr = implode(',', $teamIds);
-    $reqsRes = supabase_request("/rest/v1/team_members?team_id=in.($teamIdStr)&status=eq.pending&select=id,athlete_id,team_id,teams(name),users(full_name)&order=joined_at.desc", 'GET');
+    $reqsRes = supabase_request("/rest/v1/team_members?team_id=in.($teamIdStr)&status=eq.pending&select=id,athlete_id,team_id,teams(name),users(full_name),joined_at&order=joined_at.desc", 'GET');
     
     if ($reqsRes['status'] == 200 && is_array($reqsRes['data'])) {
         foreach ($reqsRes['data'] as $req) {
@@ -24,7 +24,8 @@ if ($teamsRes['status'] == 200 && !empty($teamsRes['data'])) {
                 'id' => $req['id'],
                 'athlete_name' => $req['users']['full_name'],
                 'team_name' => $req['teams']['name'],
-                'message' => $req['users']['full_name'] . ' wants to join ' . $req['teams']['name']
+                'message' => $req['users']['full_name'] . ' wants to join ' . $req['teams']['name'],
+                'timestamp' => $req['joined_at']
             ];
         }
     }
@@ -49,6 +50,19 @@ if ($athleteTeamsRes['status'] == 200 && !empty($athleteTeamsRes['data'])) {
                 'message' => 'New announcement in ' . $post['teams']['name'] . ': ' . $post['title']
             ];
         }
+    }
+}
+
+// 3. Get User Specific Notifications (Approvals, Rejections, etc)
+$userNotifsRes = supabase_request("/rest/v1/notifications?user_id=eq." . urlencode($user_id) . "&order=created_at.desc", 'GET');
+if ($userNotifsRes['status'] == 200 && is_array($userNotifsRes['data'])) {
+    foreach ($userNotifsRes['data'] as $notif) {
+        $notifications[] = [
+            'type' => $notif['type'],
+            'id' => $notif['id'],
+            'message' => $notif['message'],
+            'timestamp' => $notif['created_at']
+        ];
     }
 }
 

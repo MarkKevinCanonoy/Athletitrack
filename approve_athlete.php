@@ -14,9 +14,25 @@ if (empty($inputData['request_id']) || empty($inputData['action'])) {
 $request_id = $inputData['request_id'];
 $action = $inputData['action'];
 
+// Fetch request info first to get athlete_id and team_name for the notification
+$reqRes = supabase_request("/rest/v1/team_members?id=eq." . urlencode($request_id) . "&select=athlete_id,teams(name)", 'GET');
+if ($reqRes['status'] != 200 || empty($reqRes['data'])) {
+    http_response_code(404);
+    echo json_encode(['status' => 'error', 'message' => 'Request not found.']);
+    exit();
+}
+$athlete_id = $reqRes['data'][0]['athlete_id'];
+$team_name = $reqRes['data'][0]['teams']['name'];
+
 if ($action === 'approve') {
     $response = supabase_request("/rest/v1/team_members?id=eq." . urlencode($request_id), 'PATCH', ['status' => 'approved']);
     if ($response['status'] >= 200 && $response['status'] < 300) {
+        $notifData = [
+            'user_id' => $athlete_id,
+            'type' => 'approval',
+            'message' => "Your request to join $team_name has been approved!"
+        ];
+        supabase_request("/rest/v1/notifications", 'POST', $notifData);
         echo json_encode(['status' => 'success', 'message' => 'Athlete approved.']);
     } else {
         http_response_code(500);
@@ -25,6 +41,12 @@ if ($action === 'approve') {
 } else if ($action === 'reject') {
     $response = supabase_request("/rest/v1/team_members?id=eq." . urlencode($request_id), 'DELETE');
     if ($response['status'] >= 200 && $response['status'] < 300) {
+        $notifData = [
+            'user_id' => $athlete_id,
+            'type' => 'rejection',
+            'message' => "Your request to join $team_name was rejected."
+        ];
+        supabase_request("/rest/v1/notifications", 'POST', $notifData);
         echo json_encode(['status' => 'success', 'message' => 'Request rejected and removed.']);
     } else {
         http_response_code(500);

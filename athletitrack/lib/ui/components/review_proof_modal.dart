@@ -1,6 +1,10 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'video_player_widget.dart';
 import '../../theme/app_colors.dart';
 import '../../core/providers/attendance_provider.dart';
 
@@ -56,8 +60,8 @@ class _ReviewProofModalState extends ConsumerState<ReviewProofModal> {
     final isExcuse = widget.statusObj['is_excuse'] ?? false;
     final comment = widget.statusObj['comment'] ?? '';
     final coachNote = widget.statusObj['coach_note'] ?? '';
-    final submittedAt = widget.statusObj['submitted_at'] ?? '';
-    final fileUrlRaw = widget.statusObj['file_url'] ?? '[]';
+    final submittedAt = (widget.statusObj['submitted_at'] ?? '').toString();
+
     
     // Format the timestamp if available
     String formattedTime = '';
@@ -74,16 +78,20 @@ class _ReviewProofModalState extends ConsumerState<ReviewProofModal> {
     }
     
     List<String> files = [];
-    try {
-      final decoded = jsonDecode(fileUrlRaw);
-      if (decoded is List) {
-        files = decoded.cast<String>();
-      } else if (decoded is String) {
-        files = [decoded];
-      }
-    } catch (_) {
-      if (fileUrlRaw.isNotEmpty && fileUrlRaw != '[]') {
-        files = [fileUrlRaw];
+    // file_url can arrive as a JSON string or an already-decoded List
+    final rawValue = widget.statusObj['file_url'];
+    if (rawValue is List) {
+      files = rawValue.map((e) => e.toString()).toList();
+    } else if (rawValue is String && rawValue.isNotEmpty && rawValue != '[]') {
+      try {
+        final decoded = jsonDecode(rawValue);
+        if (decoded is List) {
+          files = decoded.map((e) => e.toString()).toList();
+        } else if (decoded is String) {
+          files = [decoded];
+        }
+      } catch (_) {
+        files = [rawValue];
       }
     }
 
@@ -269,37 +277,197 @@ class _ReviewProofModalState extends ConsumerState<ReviewProofModal> {
                   spacing: 12,
                   runSpacing: 12,
                   children: files.map((file) {
-                    final ext = file.split('.').last.toLowerCase();
-                    final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(ext) || file.startsWith('data:image') || file.contains('image');
+                    final uri = Uri.tryParse(file);
+                    // Strip query params before extracting extension
+                    final pathOnly = uri?.path ?? file;
+                    final lastSegment = pathOnly.split('/').last;
+                    final ext = lastSegment.contains('.') ? lastSegment.split('.').last.toLowerCase() : '';
+                    
+                    final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(ext) || file.startsWith('data:image');
+                    final isVideo = ['mp4', 'mov', 'avi', 'webm'].contains(ext) || file.startsWith('data:video');
+                    final isPdf = ext == 'pdf' || file.startsWith('data:application/pdf');
+                    final isDoc = ['doc', 'docx'].contains(ext);
                     
                     return InkWell(
                       borderRadius: BorderRadius.circular(12),
-                      onTap: () {
+                      onTap: () async {
                         if (isImage) {
                           showDialog(
                             context: context,
                             builder: (_) => Dialog(
                               backgroundColor: Colors.transparent,
-                              insetPadding: const EdgeInsets.all(16),
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: Image.network(file, fit: BoxFit.contain),
-                                  ),
-                                  Positioned(
-                                    right: 8,
-                                    top: 8,
-                                    child: IconButton(
-                                      icon: const Icon(Icons.close, color: Colors.white, size: 32),
-                                      onPressed: () => Navigator.pop(context),
-                                    ),
-                                  ),
-                                ]
+                              insetPadding: const EdgeInsets.all(32),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  color: Colors.black87,
+                                  width: double.maxFinite,
+                                  height: double.maxFinite,
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      Positioned.fill(
+                                        child: InteractiveViewer(
+                                          panEnabled: true,
+                                          minScale: 0.5,
+                                          maxScale: 4.0,
+                                          child: Image.network(file, fit: BoxFit.contain),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        right: 8,
+                                        top: 8,
+                                        child: SafeArea(
+                                          child: Material(
+                                            color: Colors.black54,
+                                            shape: const CircleBorder(),
+                                            child: IconButton(
+                                              icon: const Icon(Icons.close, color: Colors.white, size: 24),
+                                              onPressed: () => Navigator.pop(context),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ]
+                                  )
+                                )
                               )
                             )
                           );
+                        } else if (isVideo) {
+                          if (kIsWeb) {
+                            // Web: open video directly in browser for better compatibility
+                            try {
+                              await launchUrl(Uri.parse(file), mode: LaunchMode.platformDefault);
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Could not open video.'), backgroundColor: AppColors.danger),
+                                );
+                              }
+                            }
+                          } else {
+                            showDialog(
+                              context: context,
+                              builder: (_) => Dialog(
+                                backgroundColor: Colors.transparent,
+                                insetPadding: const EdgeInsets.all(32),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    color: Colors.black,
+                                    width: double.maxFinite,
+                                    height: double.maxFinite,
+                                    child: Stack(
+                                      children: [
+                                        Center(child: VideoPlayerWidget(url: file)),
+                                        Positioned(
+                                          right: 8,
+                                          top: 8,
+                                          child: SafeArea(
+                                            child: Material(
+                                              color: Colors.black54,
+                                              shape: const CircleBorder(),
+                                              child: IconButton(
+                                                icon: const Icon(Icons.close, color: Colors.white, size: 24),
+                                                onPressed: () => Navigator.pop(context),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ]
+                                    )
+                                  )
+                                )
+                              )
+                            );
+                          }
+                        } else if (isPdf) {
+                          if (kIsWeb) {
+                            // Web: open PDF directly in browser — most reliable approach
+                            try {
+                              await launchUrl(Uri.parse(file), mode: LaunchMode.platformDefault);
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Could not open PDF.'), backgroundColor: AppColors.danger),
+                                );
+                              }
+                            }
+                          } else {
+                            // Mobile: use SfPdfViewer with Google Docs fallback
+                            showDialog(
+                              context: context,
+                              builder: (_) => Dialog(
+                                backgroundColor: Colors.transparent,
+                                insetPadding: const EdgeInsets.all(32),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    color: AppColors.background,
+                                    width: double.maxFinite,
+                                    height: double.maxFinite,
+                                    child: Stack(
+                                      children: [
+                                        SfPdfViewer.network(
+                                          file,
+                                          onDocumentLoadFailed: (PdfDocumentLoadFailedDetails details) {
+                                            if (mounted) {
+                                              Navigator.pop(context);
+                                              // Fallback: open in external viewer
+                                              _openInExternalViewer(file);
+                                            }
+                                          },
+                                        ),
+                                        Positioned(
+                                          left: 8,
+                                          top: 8,
+                                          child: SafeArea(
+                                            child: Material(
+                                              color: Colors.black54,
+                                              borderRadius: BorderRadius.circular(8),
+                                              child: InkWell(
+                                                borderRadius: BorderRadius.circular(8),
+                                                onTap: () => _openInExternalViewer(file),
+                                                child: const Padding(
+                                                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(Icons.open_in_browser, color: Colors.white, size: 20),
+                                                      SizedBox(width: 8),
+                                                      Text('Open in Browser', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Positioned(
+                                          right: 8,
+                                          top: 8,
+                                          child: SafeArea(
+                                            child: Material(
+                                              color: Colors.black54,
+                                              shape: const CircleBorder(),
+                                              child: IconButton(
+                                                icon: const Icon(Icons.close, color: Colors.white, size: 24),
+                                                onPressed: () => Navigator.pop(context),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ]
+                                    )
+                                  )
+                                )
+                              )
+                            );
+                          }
+                        } else {
+                          // DOCX/DOC/other files: use Google Docs Viewer or direct open
+                          await _openInExternalViewer(file);
                         }
                       },
                       child: Container(
@@ -317,12 +485,19 @@ class _ReviewProofModalState extends ConsumerState<ReviewProofModal> {
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.insert_drive_file, size: 32, color: AppColors.primary),
+                                    Icon(
+                                      isVideo ? Icons.play_circle_outline 
+                                        : isPdf ? Icons.picture_as_pdf 
+                                        : isDoc ? Icons.description 
+                                        : Icons.insert_drive_file, 
+                                      size: 32, 
+                                      color: AppColors.primary,
+                                    ),
                                     const SizedBox(height: 4),
                                     Padding(
                                       padding: const EdgeInsets.symmetric(horizontal: 8),
                                       child: Text(
-                                        file.split('/').last,
+                                        _getFileName(file),
                                         style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
@@ -403,38 +578,66 @@ class _ReviewProofModalState extends ConsumerState<ReviewProofModal> {
       actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       actions: _showRejectNote ? null : [
         if (_isSubmitting)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: CircularProgressIndicator(),
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: CircularProgressIndicator(),
+            ),
           )
-        else ...[
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(color: AppColors.textSecondary)),
+        else
+          SizedBox(
+            width: double.infinity,
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 1,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: AppColors.border),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Close', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                if (status != 'rejected') ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 1,
+                    child: OutlinedButton.icon(
+                      onPressed: () => setState(() => _showRejectNote = true),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: const BorderSide(color: AppColors.danger),
+                        foregroundColor: AppColors.danger,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.close, size: 18),
+                      label: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+                if (status != 'approved') ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 1,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _updateStatus('approved'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: AppColors.success,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.check, size: 18),
+                      label: const Text('Approve', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-          if (status != 'rejected')
-            OutlinedButton.icon(
-              onPressed: () => setState(() => _showRejectNote = true),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.danger),
-                foregroundColor: AppColors.danger,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              icon: const Icon(Icons.close, size: 18),
-              label: const Text('Reject'),
-            ),
-          if (status != 'approved')
-            ElevatedButton.icon(
-              onPressed: () => _updateStatus('approved'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.success,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              icon: const Icon(Icons.check, size: 18),
-              label: const Text('Approve'),
-            ),
-        ]
       ],
     );
   }
@@ -445,6 +648,54 @@ class _ReviewProofModalState extends ConsumerState<ReviewProofModal> {
       case 'rejected': return AppColors.danger;
       case 'pending': return Colors.orange;
       default: return AppColors.textSecondary;
+    }
+  }
+
+  /// Opens a file URL using Google Docs Viewer (for DOCX/DOC/PDF) or direct browser
+  Future<void> _openInExternalViewer(String fileUrl) async {
+    try {
+      final viewerUrl = 'https://docs.google.com/viewer?embedded=true&url=${Uri.encodeComponent(fileUrl)}';
+      final uri = Uri.parse(viewerUrl);
+      
+      if (kIsWeb) {
+        if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+          // Fallback: try opening the raw URL directly
+          await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.platformDefault);
+        }
+      } else {
+        // Mobile: try in-app browser, then external
+        if (!await launchUrl(uri, mode: LaunchMode.inAppBrowserView)) {
+          if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+            // Last resort: open raw URL
+            await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open file. Try downloading it directly.'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Extracts a clean file name from a Supabase storage URL
+  String _getFileName(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final pathSegment = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : url;
+      // Remove the UUID prefix (e.g., "6684a1c2e4f5a_")
+      final underscoreIndex = pathSegment.indexOf('_');
+      if (underscoreIndex > 0 && underscoreIndex < pathSegment.length - 1) {
+        return pathSegment.substring(underscoreIndex + 1);
+      }
+      return pathSegment;
+    } catch (_) {
+      return url.split('/').last;
     }
   }
 }

@@ -87,6 +87,35 @@ class _CreatePostModalState extends ConsumerState<CreatePostModal> {
     final sessionTimeValue = '${_startTimeController.text.trim()}' + 
         (_endTimeController.text.trim().isNotEmpty ? ' - ${_endTimeController.text.trim()}' : '');
 
+    if (postType == 'Weekly Schedule') {
+      final postsState = ref.read(postsProvider);
+      final existingWeeklyList = postsState.posts.where((p) => (p['is_weekly'] == true || p['is_weekly'] == 'true') && p['id'].toString() != widget.existingPost?['id'].toString()).toList();
+
+      if (existingWeeklyList.isNotEmpty) {
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Overwrite Schedule?'),
+            content: const Text('A weekly schedule already exists for this team. Saving this will overwrite the previous schedule. Do you wish to continue?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true), 
+                child: const Text('Overwrite', style: TextStyle(color: AppColors.danger)),
+              ),
+            ],
+          )
+        );
+
+        if (confirm != true) return;
+        
+        // Delete all old weekly schedules
+        for (final oldWeekly in existingWeeklyList) {
+          await ref.read(postsProvider.notifier).deletePost(widget.teamId, oldWeekly['id'].toString());
+        }
+      }
+    }
+
     bool success = false;
     if (widget.existingPost != null) {
       success = await ref.read(postsProvider.notifier).editPost(

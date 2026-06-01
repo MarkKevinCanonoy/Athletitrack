@@ -37,6 +37,7 @@ class _CreateTeamModalState extends ConsumerState<CreateTeamModal> {
   Future<void> _pickLogo() async {
     FilePickerResult? result = await FilePicker.pickFiles(
       type: FileType.image,
+      withData: true,
     );
 
     if (result != null) {

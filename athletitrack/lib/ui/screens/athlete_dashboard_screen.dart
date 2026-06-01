@@ -9,6 +9,9 @@ import '../utils/modal_utils.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/teams_provider.dart';
+import '../../core/providers/network_provider.dart';
+import '../../core/services/offline_sync_service.dart';
+import 'package:intl/intl.dart';
 
 class AthleteDashboardScreen extends ConsumerStatefulWidget {
   const AthleteDashboardScreen({super.key});
@@ -33,6 +36,18 @@ class _AthleteDashboardScreenState extends ConsumerState<AthleteDashboardScreen>
     
     final teamsState = ref.watch(teamsProvider);
     final teams = teamsState.teams;
+    final isOnline = ref.watch(networkProvider);
+    
+    String offlineMsg = 'Offline Mode';
+    if (!isOnline && user?['id'] != null) {
+      final cached = ref.read(offlineSyncProvider).getCachedTeams(user!['id']);
+      if (cached != null && cached['timestamp'] != null) {
+        try {
+          final date = DateTime.parse(cached['timestamp']);
+          offlineMsg = 'Offline Mode - Data from ${DateFormat('MMM d, h:mm a').format(date)}';
+        } catch (_) {}
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -75,6 +90,24 @@ class _AthleteDashboardScreenState extends ConsumerState<AthleteDashboardScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (!isOnline)
+                  Container(
+                    width: double.infinity,
+                    color: AppColors.danger.withValues(alpha: 0.1),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.cloud_off, size: 16, color: AppColors.danger),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            offlineMsg,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.danger),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 Padding(
                   padding: const EdgeInsets.all(24.0),
                   child: Column(

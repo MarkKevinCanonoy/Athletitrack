@@ -83,5 +83,26 @@ CREATE TABLE otp_requests (
     role TEXT NOT NULL,
     otp_code TEXT NOT NULL,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    failed_attempts INT DEFAULT 0,
+    cooldown_until TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 7. Notifications (For athlete approvals/rejections)
+CREATE TABLE notifications (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 8. Password Resets (Temporary storage for OTPs)
+CREATE TABLE password_resets (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    email TEXT NOT NULL,
+    otp_hash TEXT NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    failed_attempts INT DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

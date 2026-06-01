@@ -23,7 +23,18 @@ if ($response['status'] != 200 || empty($response['data'])) {
 
 $requestData = $response['data'][0];
 
-// 2. Check if expired
+// 2. Check if in cooldown
+if (!empty($requestData['cooldown_until'])) {
+    $cooldown_until = strtotime($requestData['cooldown_until']);
+    $now = time();
+    if ($now < $cooldown_until) {
+        $minutes_left = ceil(($cooldown_until - $now) / 60);
+        echo json_encode(['status' => 'error', 'message' => "Too many failed attempts. Please try again in {$minutes_left} minutes."]);
+        exit();
+    }
+}
+
+// 3. Check if expired
 $expires_at = strtotime($requestData['expires_at']);
 $now = time();
 
@@ -34,13 +45,25 @@ if ($now > $expires_at) {
     exit();
 }
 
-// 3. Verify the code
+// 4. Verify the code
 if ($requestData['otp_code'] !== $otp_code) {
-    echo json_encode(['status' => 'error', 'message' => 'Invalid OTP code.']);
-    exit();
+    $failed_attempts = (int)($requestData['failed_attempts'] ?? 0) + 1;
+    $updateData = ['failed_attempts' => $failed_attempts];
+    
+    if ($failed_attempts >= 3) {
+        $updateData['cooldown_until'] = gmdate('Y-m-d\TH:i:s\Z', time() + 600); // 10 minutes from now
+        supabase_request("/rest/v1/otp_requests?id=eq." . $requestData['id'], 'PATCH', $updateData);
+        echo json_encode(['status' => 'error', 'message' => 'Too many failed attempts. Please try again in 10 minutes.']);
+        exit();
+    } else {
+        supabase_request("/rest/v1/otp_requests?id=eq." . $requestData['id'], 'PATCH', $updateData);
+        $attempts_left = 3 - $failed_attempts;
+        echo json_encode(['status' => 'error', 'message' => "Invalid OTP code. $attempts_left attempts remaining."]);
+        exit();
+    }
 }
 
-// 4. Move data to 'users' table
+// 5. Move data to 'users' table
 $userData = [
     'full_name' => $requestData['full_name'],
     'email' => $requestData['email'],
@@ -50,13 +73,41 @@ $userData = [
 
 $insertResponse = supabase_request("/rest/v1/users", 'POST', $userData);
 
-if ($insertResponse['status'] >= 400) {
-    echo json_encode(['status' => 'error', 'message' => 'Failed to create user account.', 'details' => $insertResponse['data']]);
+if ($insertResponse['status'] >= 400 || empty($insertResponse['data'])) {
+    echo json_encode(['status' => 'error', 'message' => 'Failed to create user account.', 'details' => $insertResponse['data'] ?? 'Unknown error']);
     exit();
 }
 
-// 5. Clean up OTP request
+$newUser = $insertResponse['data'][0];
+
+// 6. Generate a simple JWT token
+$header = json_encode(['typ' => 'JWT', 'alg' => 'HS256']);
+$payload = json_encode([
+    'user_id' => $newUser['id'],
+    'role' => $newUser['role'],
+    'exp' => time() + (86400 * 7) // 7 days expiration
+]);
+
+$base64UrlHeader = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
+$base64UrlPayload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($payload));
+
+$signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, SUPABASE_KEY, true);
+$base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
+
+$jwt = $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
+
+// 7. Clean up OTP request
 supabase_request("/rest/v1/otp_requests?id=eq." . $requestData['id'], 'DELETE');
 
-echo json_encode(['status' => 'success', 'message' => 'Account successfully verified and created. You can now log in.']);
+echo json_encode([
+    'status' => 'success', 
+    'message' => 'Account successfully verified and created.',
+    'token' => $jwt,
+    'user' => [
+        'id' => $newUser['id'],
+        'full_name' => $newUser['full_name'],
+        'email' => $newUser['email'],
+        'role' => $newUser['role']
+    ]
+]);
 ?>

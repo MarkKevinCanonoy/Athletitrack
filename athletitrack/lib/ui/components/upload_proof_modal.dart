@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../theme/app_colors.dart';
 import 'common_components.dart';
 import '../../core/providers/auth_provider.dart';
@@ -21,10 +23,11 @@ class UploadProofModal extends ConsumerStatefulWidget {
 }
 
 class _UploadProofModalState extends ConsumerState<UploadProofModal> {
-  List<PlatformFile> attachedFiles = [];
+  List<dynamic> attachedFiles = [];
   final _messageController = TextEditingController();
   bool _isLoading = true;
   bool _isSubmitting = false;
+  double? _uploadProgress;
   Map<String, dynamic>? _existingProof;
 
   @override
@@ -56,18 +59,87 @@ class _UploadProofModalState extends ConsumerState<UploadProofModal> {
     }
   }
 
-  Future<void> _pickFiles() async {
-    FilePickerResult? result = await FilePicker.pickFiles(
-      allowMultiple: true,
-      withData: true,
-      type: FileType.custom,
-      allowedExtensions: ['jpg', 'png', 'mp4', 'pdf', 'doc', 'docx'],
-    );
+  String _formatTimestamp(String timestamp) {
+    try {
+      final dt = DateTime.parse(timestamp).toLocal();
+      final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+      final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+      final min = dt.minute.toString().padLeft(2, '0');
+      return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} at $hour:$min $ampm';
+    } catch (_) {
+      return timestamp;
+    }
+  }
 
-    if (result != null) {
-      setState(() {
-        attachedFiles = result.files;
-      });
+  Future<void> _pickFiles() async {
+    if (kIsWeb) {
+      FilePickerResult? result = await FilePicker.pickFiles(
+        allowMultiple: true,
+        withData: true,
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'png', 'mp4', 'pdf', 'doc', 'docx'],
+      );
+
+      if (result != null) {
+        setState(() {
+          attachedFiles.addAll(result.files);
+        });
+      }
+    } else {
+      // Mobile - show bottom sheet for options
+      showModalBottomSheet(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Take Photo'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final picker = ImagePicker();
+                  final file = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+                  if (file != null) setState(() => attachedFiles.add(file));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.videocam),
+                title: const Text('Record Video'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final picker = ImagePicker();
+                  final file = await picker.pickVideo(source: ImageSource.camera);
+                  if (file != null) setState(() => attachedFiles.add(file));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Choose from Gallery'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final picker = ImagePicker();
+                  final files = await picker.pickMultiImage(imageQuality: 70);
+                  if (files.isNotEmpty) setState(() => attachedFiles.addAll(files));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.insert_drive_file),
+                title: const Text('Upload Document'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  FilePickerResult? result = await FilePicker.pickFiles(
+                    allowMultiple: true,
+                    type: FileType.custom,
+                    allowedExtensions: ['pdf', 'doc', 'docx'],
+                  );
+                  if (result != null) setState(() => attachedFiles.addAll(result.files));
+                },
+              ),
+            ],
+          ),
+        )
+      );
     }
   }
 
@@ -77,7 +149,26 @@ class _UploadProofModalState extends ConsumerState<UploadProofModal> {
       return;
     }
     
-    setState(() => _isSubmitting = true);
+    // Check total size
+    int totalBytes = 0;
+    for (var f in attachedFiles) {
+      if (f is PlatformFile) {
+        if (f.size > 0) totalBytes += f.size;
+      } else if (f is XFile) {
+        final length = await f.length();
+        totalBytes += length;
+      }
+    }
+    
+    if (totalBytes > 10 * 1024 * 1024) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Total file size exceeds 10MB limit. Please remove some files or compress them.')));
+      return;
+    }
+    
+    setState(() {
+      _isSubmitting = true;
+      _uploadProgress = null;
+    });
     final user = ref.read(authProvider).user;
     if (user == null) return;
 
@@ -108,6 +199,13 @@ class _UploadProofModalState extends ConsumerState<UploadProofModal> {
       message: _messageController.text,
       teamId: widget.teamId,
       isExcuse: widget.isExcuse,
+      onProgress: (progress) {
+        if (mounted) {
+          setState(() {
+            _uploadProgress = progress;
+          });
+        }
+      },
     );
 
     setState(() => _isSubmitting = false);
@@ -185,6 +283,10 @@ class _UploadProofModalState extends ConsumerState<UploadProofModal> {
                     const Text('You have already submitted proof.', style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     Text('Status: ${_existingProof!['status']}', style: const TextStyle(color: AppColors.textSecondary)),
+                    if (_existingProof!['submitted_at'] != null) ...[
+                      const SizedBox(height: 4),
+                      Text('Submitted on: ${_formatTimestamp(_existingProof!['submitted_at'])}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    ]
                   ],
                 ),
               ),
@@ -234,13 +336,20 @@ class _UploadProofModalState extends ConsumerState<UploadProofModal> {
                 decoration: const InputDecoration(labelText: 'Optional Message / Explanation'),
                 maxLines: 3,
               ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _isSubmitting ? null : _submit,
-                child: _isSubmitting 
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Text(widget.isExcuse ? 'Submit Excuse' : 'Mark as Done'),
-              )
+              if (_isSubmitting) ...[
+                if (_uploadProgress != null) ...[
+                  LinearProgressIndicator(value: _uploadProgress, minHeight: 8, borderRadius: BorderRadius.circular(4)),
+                  const SizedBox(height: 8),
+                  Text('${(_uploadProgress! * 100).toInt()}% Uploaded', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                ] else ...[
+                  const Center(child: CircularProgressIndicator()),
+                ],
+              ] else ...[
+                ElevatedButton(
+                  onPressed: _submit,
+                  child: Text(widget.isExcuse ? 'Submit Excuse' : 'Mark as Done'),
+                )
+              ]
             ],
           ],
         ),

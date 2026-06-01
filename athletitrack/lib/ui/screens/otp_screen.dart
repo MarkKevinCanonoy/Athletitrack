@@ -21,9 +21,8 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Verification successful! You can now log in.')),
+        const SnackBar(content: Text('Verification successful! Logging you in...')),
       );
-      context.go('/login');
     }
   }
 
@@ -68,6 +67,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                       ],
                       TextField(
                         controller: _otpController,
+                        enabled: !authState.isInCooldown,
                         keyboardType: TextInputType.number,
                         maxLength: 6,
                         textAlign: TextAlign.center,
@@ -79,14 +79,14 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                       ),
                       const SizedBox(height: 32),
                       ElevatedButton(
-                        onPressed: authState.isLoading ? null : _verifyOtp,
+                        onPressed: (authState.isLoading || authState.isInCooldown) ? null : _verifyOtp,
                         child: authState.isLoading 
                             ? const CircularProgressIndicator(color: Colors.white)
                             : const Text('Verify'),
                       ),
                       const SizedBox(height: 24),
                       TextButton(
-                        onPressed: authState.isLoading ? null : () async {
+                        onPressed: (authState.isLoading || authState.isInCooldown) ? null : () async {
                           final success = await ref.read(authProvider.notifier).resendOtp();
                           if (success && mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -94,7 +94,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                             );
                           }
                         },
-                        child: const Text('Resend OTP', style: TextStyle(color: AppColors.primary)),
+                        child: Text('Resend OTP', style: TextStyle(color: (authState.isLoading || authState.isInCooldown) ? Colors.grey : AppColors.primary)),
                       ),
                     ],
                   ),

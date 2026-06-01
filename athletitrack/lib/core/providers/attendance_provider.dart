@@ -2,6 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/api_client.dart';
+import '../services/offline_sync_service.dart';
+import 'network_provider.dart';
+
+import 'package:image_picker/image_picker.dart';
 
 class AttendanceState {
   final List<Map<String, dynamic>> columns;
@@ -40,6 +44,25 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
 
   Future<void> fetchAttendance(String teamId) async {
     state = state.copyWith(isLoading: true, clearError: true);
+    
+    final isOnline = ref.read(networkProvider);
+    if (!isOnline) {
+      final cached = ref.read(offlineSyncProvider).getCachedAttendance(teamId);
+      if (cached != null) {
+        final Map<String, dynamic> data = cached['data'] ?? {};
+        final List<dynamic> rawCols = data['columns'] ?? [];
+        final List<dynamic> rawRows = data['rows'] ?? [];
+        state = state.copyWith(
+          isLoading: false, 
+          columns: rawCols.cast<Map<String, dynamic>>(),
+          rows: rawRows.cast<Map<String, dynamic>>()
+        );
+      } else {
+        state = state.copyWith(isLoading: false, error: 'No offline data available for attendance');
+      }
+      return;
+    }
+
     try {
       final response = await _api.dio.post('/get_attendance.php', data: {
         'team_id': teamId,
@@ -49,6 +72,11 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
         final List<dynamic> rawCols = response.data['columns'] ?? [];
         final List<dynamic> rawRows = response.data['rows'] ?? [];
         
+        ref.read(offlineSyncProvider).cacheAttendance(teamId, {
+          'columns': rawCols,
+          'rows': rawRows,
+        });
+
         state = state.copyWith(
           isLoading: false, 
           columns: rawCols.cast<Map<String, dynamic>>(),
@@ -65,12 +93,33 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
   Future<bool> submitProof({
     required String postId,
     required String userId,
-    required List<PlatformFile> files,
+    required List<dynamic> files, // Supports PlatformFile and XFile
     String message = '',
     required String teamId,
     bool isExcuse = false,
+    void Function(double)? onProgress,
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
+    
+    final isOnline = ref.read(networkProvider);
+    if (!isOnline) {
+      final syncService = ref.read(offlineSyncProvider);
+      final taskId = 'proof_${DateTime.now().millisecondsSinceEpoch}';
+      
+      await syncService.queueUpload({
+        'id': taskId,
+        'type': 'submitProof',
+        'postId': postId,
+        'userId': userId,
+        'message': message,
+        'teamId': teamId,
+        'isExcuse': isExcuse,
+      });
+      
+      state = state.copyWith(isLoading: false);
+      return true; // Consider it successful for offline queueing
+    }
+
     try {
       final formData = FormData.fromMap({
         'post_id': postId,
@@ -80,20 +129,45 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       });
 
       for (var file in files) {
-        if (file.bytes != null) {
-          formData.files.add(MapEntry(
-            'files[]',
-            MultipartFile.fromBytes(file.bytes!, filename: file.name),
-          ));
-        } else if (file.path != null) {
-          formData.files.add(MapEntry(
-            'files[]',
-            await MultipartFile.fromFile(file.path!, filename: file.name),
-          ));
+        if (file is PlatformFile) {
+          if (file.bytes != null) {
+            formData.files.add(MapEntry(
+              'files[]',
+              MultipartFile.fromBytes(file.bytes!, filename: file.name),
+            ));
+          } else if (file.path != null) {
+            formData.files.add(MapEntry(
+              'files[]',
+              await MultipartFile.fromFile(file.path!, filename: file.name),
+            ));
+          }
+        } else if (file is XFile) {
+          try {
+            // Mobile
+            formData.files.add(MapEntry(
+              'files[]',
+              await MultipartFile.fromFile(file.path, filename: file.name),
+            ));
+          } catch (e) {
+            // Web fallback
+            final bytes = await file.readAsBytes();
+            formData.files.add(MapEntry(
+              'files[]',
+              MultipartFile.fromBytes(bytes, filename: file.name),
+            ));
+          }
         }
       }
 
-      final response = await _api.dio.post('/upload_proof.php', data: formData);
+      final response = await _api.dio.post(
+        '/upload_proof.php', 
+        data: formData,
+        onSendProgress: (int sent, int total) {
+          if (total != -1 && onProgress != null) {
+            onProgress(sent / total);
+          }
+        },
+      );
 
       if (response.data['status'] == 'success') {
         // Refresh attendance or posts if needed

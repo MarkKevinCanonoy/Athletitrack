@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/api_client.dart';
 import 'auth_provider.dart';
+import '../services/offline_sync_service.dart';
+import 'network_provider.dart';
 
 class PostsState {
   final List<Map<String, dynamic>> posts;
@@ -35,6 +37,19 @@ class PostsNotifier extends StateNotifier<PostsState> {
 
   Future<void> fetchPosts(String teamId, {String? userId, String? role}) async {
     state = state.copyWith(isLoading: true, clearError: true);
+    
+    final isOnline = ref.read(networkProvider);
+    if (!isOnline) {
+      final cached = ref.read(offlineSyncProvider).getCachedTeamFeed(teamId);
+      if (cached != null) {
+        final List<dynamic> rawPosts = cached['data'] ?? [];
+        state = state.copyWith(isLoading: false, posts: rawPosts.cast<Map<String, dynamic>>());
+      } else {
+        state = state.copyWith(isLoading: false, error: 'No offline data available for posts');
+      }
+      return;
+    }
+
     try {
       final response = await _api.dio.post('/get_posts.php', data: {
         'team_id': teamId,
@@ -45,6 +60,9 @@ class PostsNotifier extends StateNotifier<PostsState> {
       if (response.data['status'] == 'success') {
         final List<dynamic> rawPosts = response.data['posts'] ?? [];
         final List<Map<String, dynamic>> postsList = rawPosts.cast<Map<String, dynamic>>();
+        
+        ref.read(offlineSyncProvider).cacheTeamFeed(teamId, postsList);
+        
         state = state.copyWith(isLoading: false, posts: postsList);
       } else {
         state = state.copyWith(isLoading: false, error: response.data['message']);
@@ -66,6 +84,32 @@ class PostsNotifier extends StateNotifier<PostsState> {
     String targetSkillLevel = 'All',
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
+    
+    final isOnline = ref.read(networkProvider);
+    if (!isOnline) {
+      // In a real robust app, we'd add it to a local list immediately so it shows up
+      // For now we'll just queue it for sync
+      final syncService = ref.read(offlineSyncProvider);
+      final taskId = 'post_${DateTime.now().millisecondsSinceEpoch}';
+      
+      await syncService.queueUpload({
+        'id': taskId,
+        'type': 'createPost',
+        'teamId': teamId,
+        'postType': type,
+        'title': title,
+        'content': content,
+        'sessionDate': sessionDate,
+        'sessionTime': sessionTime,
+        'isWeekly': isWeekly,
+        'daysOfWeek': daysOfWeek,
+        'targetSkillLevel': targetSkillLevel,
+      });
+      
+      state = state.copyWith(isLoading: false);
+      return true; // Pretend it succeeded
+    }
+
     try {
       final response = await _api.dio.post('/create_post.php', data: {
         'team_id': teamId,

@@ -8,6 +8,7 @@ import 'training_card_modal.dart';
 import '../utils/modal_utils.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/providers/teams_provider.dart';
 
 class TeamFeedList extends ConsumerStatefulWidget {
   final bool isCoach;
@@ -62,13 +63,30 @@ class _TeamFeedListState extends ConsumerState<TeamFeedList> {
       );
     }
 
+    final sortedPosts = List<Map<String, dynamic>>.from(posts);
+    sortedPosts.sort((a, b) {
+      int getPriority(Map<String, dynamic> post) {
+        if (post['is_weekly'] == true || post['is_weekly'] == 'true') return 0;
+        if (post['type'] == 'announcement') return 1;
+        return 2; // one-time training
+      }
+      
+      final priorityA = getPriority(a);
+      final priorityB = getPriority(b);
+      
+      if (priorityA != priorityB) {
+        return priorityA.compareTo(priorityB);
+      }
+      return 0; // preserve original order (chronological desc) within the same group
+    });
+
 
     return ListView.separated(
       padding: const EdgeInsets.all(16.0),
-      itemCount: posts.length,
+      itemCount: sortedPosts.length,
       separatorBuilder: (context, index) => const SizedBox(height: 16),
       itemBuilder: (context, index) {
-        final post = posts[index];
+        final post = sortedPosts[index];
         final isTraining = post['type'] == 'training';
         final isWeekly = post['is_weekly'] == true || post['is_weekly'] == 'true';
         final String displayDate = isWeekly 
@@ -104,24 +122,34 @@ class _TeamFeedListState extends ConsumerState<TeamFeedList> {
                             displayDate,
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
                           ),
-                          if (!widget.isCoach && isTraining)
-                            IconButton(
-                              icon: const Icon(Icons.alarm_add, color: AppColors.primary, size: 20),
-                              onPressed: () {
-                                NotificationService().scheduleTrainingReminder(
-                                  id: post['id'].hashCode,
-                                  title: post['title'] ?? 'Training Session',
-                                  sessionDate: post['session_date'] ?? DateTime.now().toString().split(' ')[0],
-                                  sessionTime: post['session_time'] ?? '00:00',
-                                );
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('5-minute reminder set!'))
-                                );
-                              },
-                              tooltip: 'Set Reminder',
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                            ),
+                            if (!widget.isCoach && isTraining)
+                              IconButton(
+                                icon: const Icon(Icons.alarm_add, color: AppColors.primary, size: 20),
+                                onPressed: () {
+                                  final teamsState = ref.read(teamsProvider);
+                                  final currentTeam = teamsState.teams.firstWhere(
+                                    (t) => t['id'].toString() == widget.teamId, 
+                                    orElse: () => {}
+                                  );
+                                  final teamName = currentTeam['name'] ?? 'Your Team';
+
+                                  NotificationService().scheduleTrainingReminder(
+                                    id: post['id'].hashCode,
+                                    title: post['title'] ?? 'Training Session',
+                                    teamName: teamName,
+                                    sessionDate: post['session_date'],
+                                    sessionTime: post['session_time'] ?? '00:00',
+                                    isWeekly: isWeekly,
+                                    daysOfWeek: post['days_of_week'],
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Training reminder set!'))
+                                  );
+                                },
+                                tooltip: 'Set Reminder',
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
                         ],
                       ),
                     ),
