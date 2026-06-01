@@ -11,12 +11,8 @@ class ApiClient {
   }
 
   ApiClient._internal() {
-    // On Linux and some other systems, 127.0.0.1 is more reliable than localhost
-    // due to IPv6 resolution issues with XAMPP/LAMPP
-    String baseUrl = 'http://127.0.0.1/athletitrack-api';
-    if (!kIsWeb && Platform.isAndroid) {
-      baseUrl = 'http://10.0.2.2/athletitrack-api';
-    }
+    // Set the base URL directly to the live Render deployment
+    String baseUrl = 'https://athletitrack-uamq.onrender.com';
 
     dio = Dio(
       BaseOptions(
