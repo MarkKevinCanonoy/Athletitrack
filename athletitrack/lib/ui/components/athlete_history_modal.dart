@@ -1,15 +1,61 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import 'common_components.dart';
+import '../../core/services/api_client.dart';
 
-class AthleteHistoryModal extends StatelessWidget {
+class AthleteHistoryModal extends StatefulWidget {
   final Map<String, dynamic> row;
+  final String teamId;
 
-  const AthleteHistoryModal({super.key, required this.row});
+  const AthleteHistoryModal({super.key, required this.row, required this.teamId});
+
+  @override
+  State<AthleteHistoryModal> createState() => _AthleteHistoryModalState();
+}
+
+class _AthleteHistoryModalState extends State<AthleteHistoryModal> {
+  late String _currentSkillLevel;
+  bool _isUpdating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentSkillLevel = widget.row['skill_level'] ?? 'Intermediate';
+  }
+
+  Future<void> _updateSkillLevel(String newLevel) async {
+    setState(() => _isUpdating = true);
+    try {
+      final api = ApiClient();
+      final response = await api.dio.post('/update_skill_level.php', data: {
+        'team_id': widget.teamId,
+        'athlete_id': widget.row['athlete_id'],
+        'skill_level': newLevel,
+      });
+
+      if (response.data['status'] == 'success') {
+        setState(() {
+          _currentSkillLevel = newLevel;
+          widget.row['skill_level'] = newLevel; // Update local data
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Skill level updated')));
+        }
+      } else {
+        throw Exception(response.data['message']);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isUpdating = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final List<dynamic> attendance = row['attendance'];
+    final List<dynamic> attendance = widget.row['attendance'];
 
     int completed = 0;
     int missed = 0;
@@ -44,7 +90,7 @@ class AthleteHistoryModal extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      '${row['name']}\'s History',
+                      '${widget.row['name']}\'s History',
                       style: Theme.of(context).textTheme.titleLarge,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -52,6 +98,35 @@ class AthleteHistoryModal extends StatelessWidget {
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              // Skill Level Dropdown
+              Row(
+                children: [
+                  const Text('Skill Level:', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _isUpdating 
+                      ? const Align(alignment: Alignment.centerLeft, child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                      : DropdownButtonFormField<String>(
+                          value: _currentSkillLevel,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                          items: ['Beginner', 'Intermediate', 'Expert']
+                              .map((level) => DropdownMenuItem(value: level, child: Text(level)))
+                              .toList(),
+                          onChanged: (val) {
+                            if (val != null && val != _currentSkillLevel) {
+                              _updateSkillLevel(val);
+                            }
+                          },
+                          dropdownColor: AppColors.surface,
+                        ),
                   ),
                 ],
               ),

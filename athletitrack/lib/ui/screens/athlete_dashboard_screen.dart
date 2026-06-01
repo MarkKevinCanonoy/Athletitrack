@@ -110,18 +110,19 @@ class _AthleteDashboardScreenState extends ConsumerState<AthleteDashboardScreen>
                     ),
                   )
                 else
-                  SizedBox(
-                    height: 220,
-                    child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                      scrollDirection: Axis.horizontal,
+                  Expanded(
+                    child: GridView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 350,
+                        mainAxisExtent: 220,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                      ),
                       itemCount: teams.length,
-                      separatorBuilder: (context, index) => const SizedBox(width: 16),
                       itemBuilder: (context, index) {
                         final team = teams[index];
-                        return SizedBox(
-                          width: 280,
-                          child: Hero(
+                        return Hero(
                             tag: 'team-banner-${team['name']}',
                             child: AppCard(
                               child: InkWell(
@@ -165,7 +166,6 @@ class _AthleteDashboardScreenState extends ConsumerState<AthleteDashboardScreen>
                                 ),
                               ),
                             ),
-                          ),
                         );
                       },
                     ),

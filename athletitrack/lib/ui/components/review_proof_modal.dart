@@ -56,7 +56,22 @@ class _ReviewProofModalState extends ConsumerState<ReviewProofModal> {
     final isExcuse = widget.statusObj['is_excuse'] ?? false;
     final comment = widget.statusObj['comment'] ?? '';
     final coachNote = widget.statusObj['coach_note'] ?? '';
+    final submittedAt = widget.statusObj['submitted_at'] ?? '';
     final fileUrlRaw = widget.statusObj['file_url'] ?? '[]';
+    
+    // Format the timestamp if available
+    String formattedTime = '';
+    if (submittedAt.isNotEmpty) {
+      try {
+        final dt = DateTime.parse(submittedAt).toLocal();
+        final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+        final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+        final min = dt.minute.toString().padLeft(2, '0');
+        formattedTime = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} at $hour:$min $ampm';
+      } catch (_) {
+        formattedTime = submittedAt;
+      }
+    }
     
     List<String> files = [];
     try {
@@ -132,6 +147,13 @@ class _ReviewProofModalState extends ConsumerState<ReviewProofModal> {
                     ],
                   ],
                 ),
+                if (formattedTime.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Submitted: $formattedTime',
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  ),
+                ],
               ],
             ),
           ),

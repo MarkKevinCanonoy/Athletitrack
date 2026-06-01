@@ -16,6 +16,7 @@ class CreatePostModal extends ConsumerStatefulWidget {
 
 class _CreatePostModalState extends ConsumerState<CreatePostModal> {
   String postType = 'Announcement';
+  String targetSkillLevel = 'All';
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
   final _dateController = TextEditingController();
@@ -31,6 +32,7 @@ class _CreatePostModalState extends ConsumerState<CreatePostModal> {
       final p = widget.existingPost!;
       _titleController.text = p['title'] ?? '';
       _contentController.text = p['content'] ?? '';
+      targetSkillLevel = p['target_skill_level'] ?? 'All';
       final isWeekly = p['is_weekly'] == true || p['is_weekly'] == 'true';
       if (p['type'] == 'training') {
         postType = isWeekly ? 'Weekly Schedule' : 'One-Time Training';
@@ -47,7 +49,15 @@ class _CreatePostModalState extends ConsumerState<CreatePostModal> {
           }
         } else {
           _dateController.text = p['session_date'] ?? '';
-          _timeController.text = p['session_time'] ?? '';
+          if (p['session_time'] != null) {
+            final parts = p['session_time'].split('-');
+            if (parts.length >= 2) {
+              _startTimeController.text = parts[0].trim();
+              _endTimeController.text = parts[1].trim();
+            } else {
+              _startTimeController.text = p['session_time'];
+            }
+          }
         }
       } else {
         postType = 'Announcement';
@@ -74,6 +84,9 @@ class _CreatePostModalState extends ConsumerState<CreatePostModal> {
     if (postType == 'One-Time Training') type = 'training';
     if (postType == 'Weekly Schedule') type = 'training';
 
+    final sessionTimeValue = '${_startTimeController.text.trim()}' + 
+        (_endTimeController.text.trim().isNotEmpty ? ' - ${_endTimeController.text.trim()}' : '');
+
     bool success = false;
     if (widget.existingPost != null) {
       success = await ref.read(postsProvider.notifier).editPost(
@@ -83,11 +96,10 @@ class _CreatePostModalState extends ConsumerState<CreatePostModal> {
         title: _titleController.text.trim(),
         content: _contentController.text.trim().isEmpty ? null : _contentController.text.trim(),
         sessionDate: postType == 'One-Time Training' ? _dateController.text.trim() : null,
-        sessionTime: postType == 'Weekly Schedule' 
-            ? '${_startTimeController.text.trim()} - ${_endTimeController.text.trim()}' 
-            : (postType == 'One-Time Training' ? _timeController.text.trim() : null),
+        sessionTime: (postType == 'Weekly Schedule' || postType == 'One-Time Training') ? sessionTimeValue : null,
         isWeekly: postType == 'Weekly Schedule',
         daysOfWeek: postType == 'Weekly Schedule' ? _daysController.text.trim() : null,
+        targetSkillLevel: targetSkillLevel,
       );
     } else {
       success = await ref.read(postsProvider.notifier).createPost(
@@ -96,11 +108,10 @@ class _CreatePostModalState extends ConsumerState<CreatePostModal> {
         title: _titleController.text.trim(),
         content: _contentController.text.trim().isEmpty ? null : _contentController.text.trim(),
         sessionDate: postType == 'One-Time Training' ? _dateController.text.trim() : null,
-        sessionTime: postType == 'Weekly Schedule' 
-            ? '${_startTimeController.text.trim()} - ${_endTimeController.text.trim()}' 
-            : (postType == 'One-Time Training' ? _timeController.text.trim() : null),
+        sessionTime: (postType == 'Weekly Schedule' || postType == 'One-Time Training') ? sessionTimeValue : null,
         isWeekly: postType == 'Weekly Schedule',
         daysOfWeek: postType == 'Weekly Schedule' ? _daysController.text.trim() : null,
+        targetSkillLevel: targetSkillLevel,
       );
     }
 
@@ -142,6 +153,20 @@ class _CreatePostModalState extends ConsumerState<CreatePostModal> {
               dropdownColor: AppColors.surface,
             ),
             const SizedBox(height: 16),
+            if (postType != 'Announcement') ...[
+              DropdownButtonFormField<String>(
+                value: targetSkillLevel,
+                decoration: const InputDecoration(labelText: 'Target Skill Level'),
+                items: ['All', 'Beginner', 'Intermediate', 'Expert']
+                    .map((level) => DropdownMenuItem(value: level, child: Text(level)))
+                    .toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => targetSkillLevel = val);
+                },
+                dropdownColor: AppColors.surface,
+              ),
+              const SizedBox(height: 16),
+            ],
             TextField(
               controller: _titleController,
               decoration: const InputDecoration(labelText: 'Title'),
@@ -154,27 +179,27 @@ class _CreatePostModalState extends ConsumerState<CreatePostModal> {
             ),
             const SizedBox(height: 16),
             if (postType == 'One-Time Training') ...[
+              TextField(
+                controller: _dateController,
+                readOnly: true,
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) {
+                    _dateController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                  }
+                },
+                decoration: const InputDecoration(labelText: 'Date (YYYY-MM-DD)', suffixIcon: Icon(Icons.calendar_today, size: 20))
+              ),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(child: TextField(
-                    controller: _dateController,
-                    readOnly: true,
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: DateTime.now(),
-                        firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
-                      );
-                      if (picked != null) {
-                        _dateController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
-                      }
-                    },
-                    decoration: const InputDecoration(labelText: 'Date (YYYY-MM-DD)', suffixIcon: Icon(Icons.calendar_today, size: 20))
-                  )),
-                  const SizedBox(width: 16),
-                  Expanded(child: TextField(
-                    controller: _timeController,
+                    controller: _startTimeController,
                     readOnly: true,
                     onTap: () async {
                       final picked = await showTimePicker(
@@ -182,10 +207,25 @@ class _CreatePostModalState extends ConsumerState<CreatePostModal> {
                         initialTime: TimeOfDay.now(),
                       );
                       if (picked != null && context.mounted) {
-                        _timeController.text = "${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}";
+                        _startTimeController.text = "${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}";
                       }
                     },
-                    decoration: const InputDecoration(labelText: 'Time (HH:MM)', suffixIcon: Icon(Icons.access_time, size: 20))
+                    decoration: const InputDecoration(labelText: 'Start Time (HH:MM)', suffixIcon: Icon(Icons.access_time, size: 20))
+                  )),
+                  const SizedBox(width: 16),
+                  Expanded(child: TextField(
+                    controller: _endTimeController,
+                    readOnly: true,
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.now(),
+                      );
+                      if (picked != null && context.mounted) {
+                        _endTimeController.text = "${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}";
+                      }
+                    },
+                    decoration: const InputDecoration(labelText: 'End Time (Optional)', suffixIcon: Icon(Icons.access_time, size: 20))
                   )),
                 ],
               ),

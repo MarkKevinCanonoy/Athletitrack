@@ -13,7 +13,7 @@ if (empty($inputData['team_id'])) {
 $team_id = $inputData['team_id'];
 
 // 1. Get approved athletes
-$athletesRes = supabase_request("/rest/v1/team_members?team_id=eq." . urlencode($team_id) . "&status=eq.approved&select=athlete_id,users!athlete_id(full_name)", 'GET');
+$athletesRes = supabase_request("/rest/v1/team_members?team_id=eq." . urlencode($team_id) . "&status=eq.approved&select=athlete_id,skill_level,users!athlete_id(full_name)", 'GET');
 $athletes = $athletesRes['status'] == 200 ? $athletesRes['data'] : [];
 
 // 2. Get training posts
@@ -95,6 +95,7 @@ foreach ($athletes as $athlete) {
     $row = [
         'athlete_id' => $athlete['athlete_id'],
         'name' => $athlete['users']['full_name'],
+        'skill_level' => $athlete['skill_level'] ?? 'Intermediate',
         'attendance' => [] // key: post_id_date, value: proof status
     ];
     
@@ -108,16 +109,11 @@ foreach ($athletes as $athlete) {
         $isExcuse = false;
         $comment = null;
         $coachNote = null;
+        $submittedAt = null;
         
         foreach ($proofs as $p) {
             if ($p['athlete_id'] == $athlete['athlete_id'] && $p['post_id'] == $col['post_id']) {
-                // If one-time, date doesn't matter as much, but we match anyway.
-                // If weekly, we check if submitted_at matches the column date.
-                // For simplicity, we compare the submitted_at date.
                 $subDate = substr($p['submitted_at'], 0, 10);
-                
-                // Allow a window of submission (e.g. submitted today for yesterday's training)? 
-                // For now, exact date match, or if it's a one-time session just match by post_id.
                 
                 $postIsWeekly = false;
                 foreach($posts as $po) {
@@ -131,6 +127,7 @@ foreach ($athletes as $athlete) {
                     $isExcuse = $p['is_excuse'];
                     $comment = $p['comment'];
                     $coachNote = $p['coach_note'] ?? null;
+                    $submittedAt = $p['submitted_at'] ?? null;
                     break;
                 }
             }
@@ -143,7 +140,8 @@ foreach ($athletes as $athlete) {
             'file_url' => $fileUrl,
             'is_excuse' => $isExcuse,
             'comment' => $comment,
-            'coach_note' => $coachNote
+            'coach_note' => $coachNote,
+            'submitted_at' => $submittedAt
         ];
     }
     

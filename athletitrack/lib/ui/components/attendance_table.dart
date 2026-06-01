@@ -10,7 +10,8 @@ import 'athlete_history_modal.dart';
 
 class AttendanceTable extends ConsumerStatefulWidget {
   final String teamId;
-  const AttendanceTable({super.key, required this.teamId});
+  final String teamName;
+  const AttendanceTable({super.key, required this.teamId, required this.teamName});
 
   @override
   ConsumerState<AttendanceTable> createState() => _AttendanceTableState();
@@ -137,16 +138,19 @@ class _AttendanceTableState extends ConsumerState<AttendanceTable> {
         }
       }
 
-      final fileBytes = excel.save();
+      final safeName = widget.teamName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+      final exportFileName = '${safeName}_attendance.xlsx';
+      
+      final fileBytes = excel.save(fileName: exportFileName);
       if (fileBytes == null) throw Exception('Failed to generate Excel file');
 
       if (kIsWeb) {
         // Web download
         // ignore: avoid_web_libraries_in_flutter
-        await _downloadWeb(Uint8List.fromList(fileBytes), 'attendance_export.xlsx');
+        await _downloadWeb(Uint8List.fromList(fileBytes), exportFileName);
       } else {
         // Mobile: save to downloads
-        await _downloadMobile(Uint8List.fromList(fileBytes), 'attendance_export.xlsx');
+        await _downloadMobile(Uint8List.fromList(fileBytes), exportFileName);
       }
 
       if (mounted) {
@@ -618,7 +622,7 @@ class _AttendanceTableState extends ConsumerState<AttendanceTable> {
                     onTap: () {
                       showDialog(
                         context: context,
-                        builder: (context) => AthleteHistoryModal(row: row),
+                        builder: (context) => AthleteHistoryModal(row: row, teamId: widget.teamId),
                       );
                     },
                     child: Padding(

@@ -13,7 +13,7 @@ class CoachCalendarScreen extends ConsumerStatefulWidget {
 }
 
 class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
-  List<int> _scheduledDays = [];
+  Map<int, List<Map<String, dynamic>>> _scheduledDays = {};
   List<Map<String, dynamic>> _todaySessions = [];
   bool _isLoading = true;
 
@@ -36,7 +36,7 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
         final List<dynamic> rawPosts = response.data['posts'] ?? [];
         final List<Map<String, dynamic>> posts = rawPosts.cast<Map<String, dynamic>>();
 
-        final Set<int> scheduled = {};
+        final Map<int, List<Map<String, dynamic>>> scheduled = {};
         
         final today = DateTime.now();
         final currentMonth = today.month;
@@ -49,11 +49,20 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
 
         for (var post in posts) {
           final isWeekly = post['is_weekly'] == true || post['is_weekly'] == 'true' || post['is_weekly'] == 1 || post['is_weekly'] == '1';
+          final title = post['title'] ?? 'Training';
+
+          void addPostToDay(int day) {
+            if (scheduled[day] == null) {
+              scheduled[day] = [];
+            }
+            scheduled[day]!.add(post);
+          }
+
           if (!isWeekly && post['session_date'] != null) {
             try {
               final d = DateTime.parse(post['session_date']);
               if (d.month == currentMonth && d.year == currentYear) {
-                scheduled.add(d.day);
+                addPostToDay(d.day);
               }
             } catch (_) {}
           } else if (isWeekly && post['days_of_week'] != null) {
@@ -65,7 +74,7 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
             for (int i = 1; i <= daysInMonth; i++) {
               final currentDay = DateTime(currentYear, currentMonth, i);
               if (targetDays.contains(currentDay.weekday)) {
-                scheduled.add(i);
+                addPostToDay(i);
               }
             }
           }
@@ -73,7 +82,7 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
 
         if (mounted) {
           setState(() {
-            _scheduledDays = scheduled.toList()..sort();
+            _scheduledDays = scheduled;
             _isLoading = false;
           });
         }
@@ -148,16 +157,97 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                             }
                             
                             final day = index - startingOffset + 1;
-                            final isScheduled = _scheduledDays.contains(day);
+                            final dayPosts = _scheduledDays[day] ?? [];
+                            final isScheduled = dayPosts.isNotEmpty;
 
                             return InkWell(
                               onTap: isScheduled ? () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Viewing sessions for May $day'))
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => Dialog(
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                    backgroundColor: AppColors.surface,
+                                    child: Container(
+                                      constraints: const BoxConstraints(maxWidth: 400),
+                                      padding: const EdgeInsets.all(24),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                'Sessions on ${_getMonthName(now.month)} $day',
+                                                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.close),
+                                                onPressed: () => Navigator.pop(context),
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 16),
+                                          Flexible(
+                                            child: ListView.separated(
+                                              shrinkWrap: true,
+                                              itemCount: dayPosts.length,
+                                              separatorBuilder: (_, __) => const Divider(color: AppColors.border),
+                                              itemBuilder: (context, idx) {
+                                                final p = dayPosts[idx];
+                                                final teamName = p['teams'] != null ? p['teams']['name'] : 'Unknown Team';
+                                                final time = p['session_time'] ?? 'No time set';
+                                                final title = p['title'] ?? 'Training';
+                                                final isWeekly = p['is_weekly'] == true || p['is_weekly'] == 'true' || p['is_weekly'] == 1 || p['is_weekly'] == '1';
+                                                final typeStr = isWeekly ? 'Weekly Recurring' : 'One-Time';
+                                                
+                                                return Padding(
+                                                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                                      const SizedBox(height: 4),
+                                                      Row(
+                                                        children: [
+                                                          const Icon(Icons.group, size: 14, color: AppColors.textSecondary),
+                                                          const SizedBox(width: 4),
+                                                          Text(teamName, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Row(
+                                                        children: [
+                                                          const Icon(Icons.access_time, size: 14, color: AppColors.textSecondary),
+                                                          const SizedBox(width: 4),
+                                                          Text(time, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Row(
+                                                        children: [
+                                                          const Icon(Icons.info_outline, size: 14, color: AppColors.textSecondary),
+                                                          const SizedBox(width: 4),
+                                                          Text(typeStr, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 );
                               } : null,
                               borderRadius: BorderRadius.circular(8),
                               child: Container(
+                                padding: const EdgeInsets.all(2),
                                 decoration: BoxDecoration(
                                   color: AppColors.surface,
                                   borderRadius: BorderRadius.circular(8),
@@ -166,8 +256,8 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                                     width: isScheduled ? 2 : 1,
                                   ),
                                 ),
-                                child: Stack(
-                                  alignment: Alignment.center,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.start,
                                   children: [
                                     Text(
                                       '$day',
@@ -177,17 +267,39 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                                       ),
                                     ),
                                     if (isScheduled)
-                                      Positioned(
-                                        bottom: 8,
-                                        child: Container(
-                                          width: 6,
-                                          height: 6,
-                                          decoration: const BoxDecoration(
-                                            color: AppColors.primary,
-                                            shape: BoxShape.circle,
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                                          child: ListView.builder(
+                                            physics: const NeverScrollableScrollPhysics(),
+                                            itemCount: dayPosts.length,
+                                            itemBuilder: (context, idx) {
+                                              final title = dayPosts[idx]['title'] ?? 'Training';
+                                              return Padding(
+                                                padding: const EdgeInsets.only(bottom: 2.0),
+                                                child: Row(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    const Text('• ', style: TextStyle(color: AppColors.primary, fontSize: 10, height: 1.1)),
+                                                    Expanded(
+                                                      child: Text(
+                                                        title,
+                                                        style: const TextStyle(
+                                                          fontSize: 9,
+                                                          color: AppColors.primary,
+                                                          height: 1.1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                        maxLines: 1,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            },
                                           ),
                                         ),
-                                      )
+                                      ),
                                   ],
                                 ),
                               ),

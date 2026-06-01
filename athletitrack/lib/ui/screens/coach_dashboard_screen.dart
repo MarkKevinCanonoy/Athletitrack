@@ -26,6 +26,88 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
     });
   }
 
+  String _getNextTraining(List<dynamic>? posts) {
+    if (posts == null || posts.isEmpty) return 'No scheduled training';
+    
+    final now = DateTime.now();
+    DateTime? nextTraining;
+    String? nextTrainingTitle;
+
+    final dayMap = {
+      'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 7,
+      'M': 1, 'T': 2, 'W': 3, 'Th': 4, 'F': 5, 'S': 6, 'Su': 7
+    };
+    
+    DateTime _combineDateAndTime(DateTime baseDate, String? timeString) {
+      if (timeString == null || timeString.trim().isEmpty) {
+        return DateTime(baseDate.year, baseDate.month, baseDate.day, 23, 59); // Assume end of day if no time
+      }
+      final match = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(timeString);
+      if (match != null) {
+        int hour = int.parse(match.group(1)!);
+        int min = int.parse(match.group(2)!);
+        // Handle basic 12-hour typing errors if they wrote 1:00 to 5:00 for afternoon
+        if (hour >= 1 && hour <= 7 && !timeString.toLowerCase().contains('am')) {
+          if (timeString.toLowerCase().contains('pm') || hour < 8) {
+            // Very naive heuristic: 1 to 7 is usually PM in sports contexts if AM isn't specified
+            // But to be safe, just use the exact parsed time unless PM is explicitly there
+            if (timeString.toLowerCase().contains('pm')) hour += 12;
+          }
+        }
+        return DateTime(baseDate.year, baseDate.month, baseDate.day, hour, min);
+      }
+      return DateTime(baseDate.year, baseDate.month, baseDate.day, 23, 59);
+    }
+
+    for (var rawPost in posts) {
+      if (rawPost is! Map) continue;
+      final post = rawPost;
+      
+      final isWeekly = post['is_weekly'] == true || post['is_weekly'] == 'true' || post['is_weekly'] == 1 || post['is_weekly'] == '1';
+      final title = post['title'] ?? 'Training';
+      
+      if (!isWeekly && post['session_date'] != null) {
+        try {
+          final date = DateTime.parse(post['session_date']);
+          final exactDateTime = _combineDateAndTime(date, post['session_time']);
+          
+          if (exactDateTime.isAfter(now)) {
+             if (nextTraining == null || exactDateTime.isBefore(nextTraining!)) {
+               nextTraining = exactDateTime;
+               nextTrainingTitle = title;
+             }
+          }
+        } catch (_) {}
+      } else if (isWeekly && post['days_of_week'] != null) {
+        final daysOfWeek = (post['days_of_week'] as String).split(',').map((e) => e.trim()).toList();
+        final targetDays = daysOfWeek.map((d) => dayMap[d]).where((d) => d != null).cast<int>().toList();
+        
+        for (int i = 0; i < 8; i++) {
+          final checkDate = now.add(Duration(days: i));
+          if (targetDays.contains(checkDate.weekday)) {
+             final candidate = _combineDateAndTime(checkDate, post['session_time']);
+             if (candidate.isAfter(now)) {
+               if (nextTraining == null || candidate.isBefore(nextTraining!)) {
+                 nextTraining = candidate;
+                 nextTrainingTitle = title;
+               }
+               break;
+             }
+          }
+        }
+      }
+    }
+
+    if (nextTraining != null) {
+      final daysDiff = DateTime(nextTraining!.year, nextTraining!.month, nextTraining!.day)
+          .difference(DateTime(now.year, now.month, now.day)).inDays;
+      String dayStr = daysDiff == 0 ? 'Today' : (daysDiff == 1 ? 'Tomorrow' : 'In $daysDiff days');
+      return '${nextTrainingTitle ?? 'Training'} ($dayStr)';
+    }
+    
+    return 'No upcoming training';
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.read(authProvider).user;
@@ -128,18 +210,19 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
                     ),
                   )
                 else
-                  SizedBox(
-                    height: 220, // Horizontal scrollable area
-                    child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                      scrollDirection: Axis.horizontal,
+                  Expanded(
+                    child: GridView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 350,
+                        mainAxisExtent: 220,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                      ),
                       itemCount: teams.length,
-                      separatorBuilder: (context, index) => const SizedBox(width: 16),
                       itemBuilder: (context, index) {
                         final team = teams[index];
-                        return SizedBox(
-                          width: 280,
-                          child: Hero(
+                        return Hero(
                             tag: 'team-banner-${team['name']}',
                             child: AppCard(
                               onTap: () {
@@ -165,6 +248,32 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.people_outline, size: 16, color: AppColors.textSecondary),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            '${team['athlete_count'] ?? 0} Athletes',
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.event_outlined, size: 16, color: AppColors.textSecondary),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              _getNextTraining(team['posts'] as List?),
+                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                       const Spacer(),
                                       Row(
                                         children: [
@@ -181,8 +290,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
                                 ],
                               ),
                             ),
-                          ),
-                        );
+                          );
                       },
                     ),
                   ),

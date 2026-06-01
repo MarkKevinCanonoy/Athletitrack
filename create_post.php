@@ -19,6 +19,7 @@ $session_date = $inputData['session_date'] ?? null;
 $session_time = $inputData['session_time'] ?? null;
 $is_weekly = isset($inputData['is_weekly']) ? filter_var($inputData['is_weekly'], FILTER_VALIDATE_BOOLEAN) : false;
 $days_of_week = $inputData['days_of_week'] ?? null;
+$target_skill_level = $inputData['target_skill_level'] ?? 'All';
 
 $insertData = [
     'team_id' => $team_id,
@@ -28,7 +29,8 @@ $insertData = [
     'session_date' => $session_date,
     'session_time' => $session_time,
     'is_weekly' => $is_weekly,
-    'days_of_week' => $days_of_week
+    'days_of_week' => $days_of_week,
+    'target_skill_level' => $target_skill_level
 ];
 
 $response = supabase_request("/rest/v1/posts", 'POST', $insertData);

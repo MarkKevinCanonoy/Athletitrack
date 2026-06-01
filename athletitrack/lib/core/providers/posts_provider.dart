@@ -63,6 +63,7 @@ class PostsNotifier extends StateNotifier<PostsState> {
     String? sessionTime,
     bool isWeekly = false,
     String? daysOfWeek,
+    String targetSkillLevel = 'All',
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
@@ -75,6 +76,7 @@ class PostsNotifier extends StateNotifier<PostsState> {
         'session_time': sessionTime,
         'is_weekly': isWeekly,
         'days_of_week': daysOfWeek,
+        'target_skill_level': targetSkillLevel,
       });
 
       if (response.data['status'] == 'success') {
@@ -100,6 +102,7 @@ class PostsNotifier extends StateNotifier<PostsState> {
     String? sessionTime,
     bool isWeekly = false,
     String? daysOfWeek,
+    String targetSkillLevel = 'All',
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
@@ -112,6 +115,7 @@ class PostsNotifier extends StateNotifier<PostsState> {
         'session_time': sessionTime,
         'is_weekly': isWeekly,
         'days_of_week': daysOfWeek,
+        'target_skill_level': targetSkillLevel,
       });
 
       if (response.data['status'] == 'success') {

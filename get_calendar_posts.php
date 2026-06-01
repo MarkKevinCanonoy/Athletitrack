@@ -23,7 +23,7 @@ $teamIds = array_column($teams, 'id');
 $teamIdStr = implode(',', $teamIds);
 
 // Fetch posts for these teams
-$postsRes = supabase_request("/rest/v1/posts?team_id=in.(" . urlencode($teamIdStr) . ")&type=eq.training", 'GET');
+$postsRes = supabase_request("/rest/v1/posts?team_id=in.(" . urlencode($teamIdStr) . ")&type=eq.training&select=*,teams(name)", 'GET');
 if ($postsRes['status'] == 200) {
     echo json_encode(['status' => 'success', 'posts' => $postsRes['data']]);
 } else {

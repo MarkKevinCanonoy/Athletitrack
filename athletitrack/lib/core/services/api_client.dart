@@ -13,9 +13,9 @@ class ApiClient {
   ApiClient._internal() {
     // On Linux and some other systems, 127.0.0.1 is more reliable than localhost
     // due to IPv6 resolution issues with XAMPP/LAMPP
-    String baseUrl = 'http://127.0.0.1:8080/Athletitrack';
+    String baseUrl = 'http://127.0.0.1/athletitrack-api';
     if (!kIsWeb && Platform.isAndroid) {
-      baseUrl = 'http://10.0.2.2:8080/Athletitrack';
+      baseUrl = 'http://10.0.2.2/athletitrack-api';
     }
 
     dio = Dio(

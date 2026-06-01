@@ -32,7 +32,7 @@ if ($response['status'] == 200) {
 
         $filteredPosts = [];
         foreach ($posts as $post) {
-            $post_skill = $post['skill_level_filter'] ?? 'All';
+            $post_skill = $post['target_skill_level'] ?? 'All';
             if ($post_skill === 'All' || empty($post_skill) || strtolower($post_skill) === strtolower($athlete_skill)) {
                 $filteredPosts[] = $post;
             }

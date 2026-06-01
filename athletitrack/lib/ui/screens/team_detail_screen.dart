@@ -196,7 +196,7 @@ class TeamDetailScreen extends StatelessWidget {
                           ? Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 800), child: TeamFeedList(isCoach: true, teamId: teamData['id'])))
                           : const Center(child: Text('Invalid Team')),
                       teamData['id'] != null 
-                          ? Padding(padding: const EdgeInsets.symmetric(horizontal: 24.0), child: AttendanceTable(teamId: teamData['id']))
+                          ? Padding(padding: const EdgeInsets.symmetric(horizontal: 24.0), child: AttendanceTable(teamId: teamData['id'], teamName: teamName))
                           : const Center(child: Text('Invalid Team')),
                     ],
                   ),
