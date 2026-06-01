@@ -101,6 +101,9 @@ class _CreateTeamModalState extends ConsumerState<CreateTeamModal> {
                   onPressed: _pickLogo,
                   icon: const Icon(Icons.image),
                   label: const Text('Pick Logo'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(120, 40),
+                  ),
                 )
               ],
             ),
