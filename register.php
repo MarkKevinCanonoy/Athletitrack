@@ -22,7 +22,7 @@ $fullName = $data['full_name'];
 $role = $data['role'];
 
 // 1. Check if email already exists in 'users' table
-$checkUser = supabase_request("/rest/v1/users?email=eq." . urlencode($email));
+$checkUser = supabase_request("/rest/v1/users?email=ilike." . urlencode($email));
 if ($checkUser['status'] == 200 && !empty($checkUser['data'])) {
     echo json_encode(['status' => 'error', 'message' => 'Email already registered.']);
     exit();
@@ -35,7 +35,7 @@ $password_hash = password_hash($password, PASSWORD_BCRYPT);
 
 // 3. Save to 'otp_requests' table in Supabase
 // First, delete any existing pending OTPs for this email to avoid duplicates
-supabase_request("/rest/v1/otp_requests?email=eq." . urlencode($email), 'DELETE');
+supabase_request("/rest/v1/otp_requests?email=ilike." . urlencode($email), 'DELETE');
 
 $otpData = [
     'email' => $email,
@@ -79,7 +79,7 @@ try {
     echo json_encode(['status' => 'success', 'message' => 'OTP sent to email.']);
 } catch (Exception $e) {
     // Cleanup the database request if email fails
-    supabase_request("/rest/v1/otp_requests?email=eq." . urlencode($email), 'DELETE');
+    supabase_request("/rest/v1/otp_requests?email=ilike." . urlencode($email), 'DELETE');
     echo json_encode(['status' => 'error', 'message' => "Message could not be sent. Mailer Error: {$mail->ErrorInfo}"]);
 }
 ?>

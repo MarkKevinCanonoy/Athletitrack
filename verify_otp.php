@@ -14,7 +14,7 @@ $email = filter_var($data['email'], FILTER_SANITIZE_EMAIL);
 $otp_code = $data['otp_code'];
 
 // 1. Find the OTP request in the database
-$response = supabase_request("/rest/v1/otp_requests?email=eq." . urlencode($email) . "&select=*");
+$response = supabase_request("/rest/v1/otp_requests?email=ilike." . urlencode($email) . "&select=*");
 
 if ($response['status'] != 200 || empty($response['data'])) {
     echo json_encode(['status' => 'error', 'message' => 'No pending registration found for this email.']);
