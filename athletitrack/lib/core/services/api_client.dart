@@ -11,17 +11,7 @@ class ApiClient {
   }
 
   ApiClient._internal() {
-    String baseUrl;
-    if (kReleaseMode) {
-      // In production (Live Web / Release APK), use the Render backend.
-      baseUrl = 'https://athletitrack-uamq.onrender.com';
-    } else {
-      // In development (flutter run), use local XAMPP backend so emails can be sent.
-      baseUrl = 'http://127.0.0.1/athletitrack-api';
-      if (!kIsWeb && Platform.isAndroid) {
-        baseUrl = 'http://10.0.2.2/athletitrack-api';
-      }
-    }
+    String baseUrl = 'https://athletitrack-uamq.onrender.com';
 
     dio = Dio(
       BaseOptions(
