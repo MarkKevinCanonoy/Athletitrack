@@ -4,6 +4,7 @@ import '../../theme/app_colors.dart';
 import '../components/team_feed_list.dart';
 import '../../core/providers/network_provider.dart';
 import '../../core/services/offline_sync_service.dart';
+import '../../core/providers/teams_provider.dart';
 import 'package:intl/intl.dart';
 
 class AthleteTeamFeedScreen extends ConsumerWidget {
@@ -32,6 +33,42 @@ class AthleteTeamFeedScreen extends ConsumerWidget {
         title: Text(teamName),
         elevation: 0,
         scrolledUnderElevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.exit_to_app),
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Leave Team'),
+                  content: const Text('Are you sure you want to leave this team? You can always rejoin using the team code.'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, true), 
+                      child: const Text('Leave', style: TextStyle(color: AppColors.danger)),
+                    ),
+                  ],
+                ),
+              );
+              
+              if (confirm == true && teamData['id'] != null) {
+                final success = await ref.read(teamsProvider.notifier).leaveTeam(teamData['id']);
+                if (success && context.mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Left team successfully.')),
+                  );
+                } else if (context.mounted) {
+                  final errorMsg = ref.read(teamsProvider).error ?? 'Failed to leave team.';
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(errorMsg), backgroundColor: AppColors.danger),
+                  );
+                }
+              }
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: Center(

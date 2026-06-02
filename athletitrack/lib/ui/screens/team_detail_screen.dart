@@ -10,6 +10,7 @@ import '../components/notifications_modal.dart';
 import '../utils/modal_utils.dart';
 import '../../core/providers/network_provider.dart';
 import '../../core/services/offline_sync_service.dart';
+import '../../core/providers/teams_provider.dart';
 import 'package:intl/intl.dart';
 
 class TeamDetailScreen extends ConsumerWidget {
@@ -40,6 +41,42 @@ class TeamDetailScreen extends ConsumerWidget {
           title: Text(teamName),
           elevation: 0,
           scrolledUnderElevation: 0,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Delete Team'),
+                    content: const Text('Are you sure you want to delete this team? Athletes will no longer be able to see it.'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true), 
+                        child: const Text('Delete', style: TextStyle(color: AppColors.danger)),
+                      ),
+                    ],
+                  ),
+                );
+                
+                if (confirm == true && teamData['id'] != null) {
+                  final success = await ref.read(teamsProvider.notifier).deleteTeam(teamData['id']);
+                  if (success && context.mounted) {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Team deleted successfully.')),
+                    );
+                  } else if (context.mounted) {
+                    final errorMsg = ref.read(teamsProvider).error ?? 'Failed to delete team.';
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(errorMsg), backgroundColor: AppColors.danger),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(60),
             child: Padding(

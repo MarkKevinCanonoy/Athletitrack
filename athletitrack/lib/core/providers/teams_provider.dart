@@ -133,6 +133,56 @@ class TeamsNotifier extends StateNotifier<TeamsState> {
     }
   }
 
+  Future<bool> deleteTeam(String teamId) async {
+    final authState = ref.read(authProvider);
+    final userId = authState.user?['id'];
+    if (userId == null) return false;
+
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final response = await _api.dio.post('/delete_team.php', data: {
+        'team_id': teamId,
+        'coach_id': userId,
+      });
+
+      if (response.data['status'] == 'success') {
+        await fetchTeams();
+        return true;
+      } else {
+        state = state.copyWith(isLoading: false, error: response.data['message']);
+        return false;
+      }
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: 'Failed to delete team: ${e.toString()}');
+      return false;
+    }
+  }
+
+  Future<bool> leaveTeam(String teamId) async {
+    final authState = ref.read(authProvider);
+    final userId = authState.user?['id'];
+    if (userId == null) return false;
+
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final response = await _api.dio.post('/leave_team.php', data: {
+        'team_id': teamId,
+        'athlete_id': userId,
+      });
+
+      if (response.data['status'] == 'success') {
+        await fetchTeams();
+        return true;
+      } else {
+        state = state.copyWith(isLoading: false, error: response.data['message']);
+        return false;
+      }
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: 'Failed to leave team: ${e.toString()}');
+      return false;
+    }
+  }
+
   void clearError() {
     state = state.copyWith(clearError: true);
   }
